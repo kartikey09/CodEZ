@@ -1,0 +1,67 @@
+openapi: 3.1.0
+info:
+  title: IIIT-B Contest Platform API (sketch)
+  version: 0.0.1
+  description: >
+    Day-1 endpoint sketch. Only /api/health exists today; the rest are the
+    planned surface, fleshed out across Days 2–11. Auth is a session cookie
+    issued after admin-issued-credential login.
+
+servers:
+  - url: http://localhost:8080
+
+tags:
+  - name: health
+  - name: auth
+  - name: contest
+  - name: submissions
+  - name: leaderboard
+  - name: admin
+
+paths:
+  /api/health:
+    get:
+      tags: [health]
+      summary: Liveness (implemented Day 1)
+      responses: { '200': { description: ok } }
+
+  /auth/login:
+    post:
+      tags: [auth]
+      summary: Log in with admin-issued login_id + password (Day 2). Sets session cookie.
+      responses: { '200': { description: logged in }, '401': { description: bad credentials } }
+  /auth/me:
+    get: { tags: [auth], summary: Current user (Day 2), responses: { '200': { description: ok }, '401': { description: not logged in } } }
+  /auth/logout:
+    post: { tags: [auth], summary: Destroy session (Day 2), responses: { '204': { description: done } } }
+  /auth/change-password:
+    post: { tags: [auth], summary: Change password / clear must-change flag (Day 2), responses: { '204': { description: done } } }
+
+  /api/time:
+    get: { tags: [contest], summary: Server clock for the countdown (Day 5), responses: { '200': { description: ok } } }
+  /api/problems:
+    get: { tags: [contest], summary: List problems (statements gated until starts_at) (Day 4), responses: { '200': { description: ok } } }
+  /api/problems/{id}:
+    get: { tags: [contest], summary: One problem statement (Day 4), responses: { '200': { description: ok }, '404': { description: hidden/not found } } }
+
+  /api/submissions:
+    post:
+      tags: [submissions]
+      summary: Submit code (Day 5). Validates window/lang/size/cooldown/in-flight, enqueues, returns 202.
+      responses: { '202': { description: queued }, '409': { description: cooldown or in-flight }, '429': { description: backpressure } }
+    get:
+      tags: [submissions]
+      summary: My submissions (Day 5)
+      responses: { '200': { description: ok } }
+  /api/submissions/{id}:
+    get: { tags: [submissions], summary: Submission status/verdict (Day 5), responses: { '200': { description: ok }, '403': { description: not yours } } }
+
+  /api/leaderboard:
+    get: { tags: [leaderboard], summary: Top-N standings (REST fallback; WS push is primary) (Day 9–10), responses: { '200': { description: ok } } }
+
+  /api/admin/problems:
+    post: { tags: [admin], summary: Create/edit problems + tests (Day 4/11), responses: { '200': { description: ok }, '403': { description: not admin } } }
+  /api/admin/users:
+    post: { tags: [admin], summary: Provision users / bulk CSV import (Day 11), responses: { '200': { description: ok }, '403': { description: not admin } } }
+  /api/admin/contest:
+    patch: { tags: [admin], summary: Start/stop/timing + rejudge triggers (Day 11), responses: { '200': { description: ok }, '403': { description: not admin } } }

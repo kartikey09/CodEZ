@@ -1,0 +1,26 @@
+# Java / Maven
+target/
+*.class
+*.jar
+!**/maven-wrapper.jar
+.mvn/wrapper/maven-wrapper.jar.unused
+
+# Node
+node_modules/
+dist/
+*.local
+
+# IDE / OS
+.idea/
+*.iml
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Secrets / env
+.env
+*.env
+!*.env.example
+
+# GitHub Actions self-hosted runner (lives OUTSIDE the repo, but just in case)
+actions-runner/

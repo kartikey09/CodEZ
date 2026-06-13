@@ -1,0 +1,57 @@
+name: CI
+
+# Runs on every push (fast feedback) and on PRs into main (the merge gate).
+on:
+  push:
+  pull_request:
+    branches: [ main ]
+
+# Cancel superseded runs on the same ref to save the single runner's time.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: backend (contest-api)
+    runs-on: self-hosted            # the runner you installed on the VM
+    defaults:
+      run:
+        working-directory: services/contest-api
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Build & test
+        run: ./mvnw -B --no-transfer-progress clean verify
+
+  frontend:
+    name: frontend (lint + build)
+    runs-on: self-hosted
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build

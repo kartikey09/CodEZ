@@ -1,0 +1,39 @@
+name: contest-dev
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: contest-postgres
+    environment:
+      POSTGRES_USER: contest
+      POSTGRES_PASSWORD: contest_dev_pw      # DEV ONLY — prod uses a real secret
+      POSTGRES_DB: contest
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data       # named volume → survives container recreate
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U contest -d contest"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  redis:
+    image: redis:7
+    container_name: contest-redis
+    command: ["redis-server", "--appendonly", "yes"]   # AOF persistence
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:
