@@ -1,0 +1,13 @@
+# Activated in production with --spring.profiles.active=prod
+app:
+  cookie-secure: true                # cookies only over HTTPS
+
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+  data:
+    redis:
+      host: ${REDIS_HOST:redis}
+      port: ${REDIS_PORT:6379}
