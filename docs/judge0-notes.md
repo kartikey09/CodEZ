@@ -5,14 +5,14 @@ Postgres/Redis, with the `isolate` sandbox inside). We stand it up on Day 6 and 
 the orchestrator to it on Day 7. Until then this file is a living crib sheet.
 
 ## Pin the release
-- Release pinned: `judge0-vX.Y.Z`  ← FILL IN (don't track `latest`)
+- Release pinned: `judge0-v1.13.1`  ← FILL IN (don't track `latest`)
 - Source / docs: https://github.com/judge0/judge0  (and its `judge0.conf`)
 
 ## ⚠ cgroup requirement — VERIFY THIS ON DAY 1
 Several Judge0 CE releases require the host to boot with **cgroup v1**
 (`systemd.unified_cgroup_hierarchy=0` via GRUB) for `isolate` to work.
 - On our setup this change happens **inside the Ubuntu VM**, never on the CachyOS host.
-- Confirm whether YOUR pinned release needs it: ____  (yes / no)
+- Confirm whether YOUR pinned release needs it: __yes__ (yes / no)
 - If yes, the GRUB edit + VM reboot is scheduled as the first action when Judge0 goes up.
 
 ## Auth
