@@ -15,7 +15,7 @@ import java.util.List;
  * DEV seeding only. Active with: --spring.profiles.active=seed
  * Creates one admin + a few students with RANDOM initial passwords (printed to
  * stdout so you can hand them out), each flagged must-change-on-first-login.
- * Idempotent: existing login_ids are skipped. Real provisioning is the admin
+ * Always resets passwords — existing users get a new password on each run. Real provisioning is the admin
  * panel (Day 11), which also handles secure credential export.
  */
 @Configuration
@@ -30,18 +30,22 @@ public class SeedConfig {
                 new Seed("admin", "Admin", "MonsterPipeLinePunch"),
                 new Seed("stud001", "Student One", "student"),
                 new Seed("stud002", "Student Two", "student"),
-                new Seed("stud003", "Student Three", "student"));
+                new Seed("stud003", "Student Three", "student"),
+                new Seed("stud004", "Student Four", "student"));
 
             SecureRandom rng = new SecureRandom();
             System.out.println("\n==== SEED CREDENTIALS (dev only) — hand out, then they change on first login ====");
             for (Seed s : seeds) {
-                if (users.findByLoginId(s.loginId()).isPresent()) {
-                    System.out.println(s.loginId() + "\t(exists, skipped)");
-                    continue;
-                }
                 String pw = randomPassword(rng, 10);
-                users.save(new User(s.loginId(), encoder.encode(pw), s.name(), s.role()));
-                System.out.println(s.loginId() + "\t" + pw + "\t[" + s.role() + "]");
+                users.findByLoginId(s.loginId()).ifPresentOrElse(existing -> {
+                    existing.setPasswordHash(encoder.encode(pw));
+                    existing.setMustChangePassword(true);
+                    users.save(existing);
+                    System.out.println(s.loginId() + "\t" + pw + "\t[" + s.role() + "] (reset)");
+                }, () -> {
+                    users.save(new User(s.loginId(), encoder.encode(pw), s.name(), s.role()));
+                    System.out.println(s.loginId() + "\t" + pw + "\t[" + s.role() + "] (created)");
+                });
             }
             System.out.println("================================================================================\n");
         };
