@@ -48,6 +48,17 @@ public class SessionAuthFilter extends OncePerRequestFilter {
             chain.doFilter(req, res);
             return;
         }
+
+        /*
+        * "OPTIONS".equalsIgnoreCase(req.getMethod()): This checks if the HTTP request method is OPTIONS.
+        * Why it's here: OPTIONS is a pre-flight request used in CORS (Cross-Origin Resource Sharing). Browsers send
+        * this automatically to check if a cross-origin request is allowed. If you force an OPTIONS request to
+        * authenticate, the browser-level security check will often fail, breaking your frontend-to-backend
+        * communication.
+        * chain.doFilter(req, res);: If either condition is true, the request is allowed to "pass through" the filter
+        * chain without further authentication checks.
+        * */
+
         if (user == null) {
             writeError(res, HttpServletResponse.SC_UNAUTHORIZED, "UNAUTHORIZED", "Authentication required");
             return;
