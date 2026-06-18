@@ -1,0 +1,21 @@
+package in.ac.iiitb.contest.session;
+
+import jakarta.servlet.http.HttpServletRequest;
+
+/** Read the identity the filter resolved for the current request. */
+public final class AuthContext {
+
+    public static final String ATTR_USER = "auth.currentUser";
+    public static final String ATTR_SID = "auth.sid";
+
+    private AuthContext() {
+    }
+
+    public static CurrentUser user(HttpServletRequest req) {
+        return (CurrentUser) req.getAttribute(ATTR_USER);
+    }
+
+    public static String sid(HttpServletRequest req) {
+        return (String) req.getAttribute(ATTR_SID);
+    }
+}
