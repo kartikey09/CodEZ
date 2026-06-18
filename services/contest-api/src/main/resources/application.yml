@@ -4,8 +4,28 @@ server:
 spring:
   application:
     name: contest-api
+  datasource:
+    url: jdbc:postgresql://localhost:5432/contest
+    username: contest
+    password: contest_dev_pw          # DEV ONLY
+  jpa:
+    hibernate:
+      ddl-auto: none                  # Flyway owns the schema
+    open-in-view: false
+  flyway:
+    enabled: true
+    table: flyway_history_contest     # separate history from auth-service's flyway_history_auth
+    baseline-on-migrate: true
+    baseline-version: 0
+  data:
+    redis:
+      host: localhost
+      port: 6379
 
-# Only health + info exposed for now; we add db/redis indicators on later days.
+app:
+  session:
+    ttl-hours: 8                      # must match auth-service so the sliding window is consistent
+
 management:
   endpoints:
     web:
