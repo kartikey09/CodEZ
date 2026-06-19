@@ -4,6 +4,7 @@ import in.ac.iiitb.contest.error.ContestNotStartedException;
 import in.ac.iiitb.contest.error.NoContestFoundException;
 import in.ac.iiitb.contest.error.NotFoundException;
 import in.ac.iiitb.contest.web.dto.ErrorResponse;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -46,5 +47,11 @@ public class ApiExceptionHandler {
     public ResponseEntity<ErrorResponse> unreadable() {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
             .body(new ErrorResponse("BAD_REQUEST", "Malformed request body"));
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponse> conflict() {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+            .body(new ErrorResponse("CONFLICT", "Resource already exists or violates a unique constraint"));
     }
 }

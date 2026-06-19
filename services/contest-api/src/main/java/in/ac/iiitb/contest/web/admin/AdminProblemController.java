@@ -4,6 +4,7 @@ import in.ac.iiitb.contest.contest.*;
 import in.ac.iiitb.contest.error.NoContestFoundException;
 import in.ac.iiitb.contest.error.NotFoundException;
 import in.ac.iiitb.contest.web.dto.*;
+import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -33,6 +34,7 @@ public class AdminProblemController {
     }
 
     /** Append test cases (write-only — nothing here ever reads hidden test data back out). */
+    @Transactional
     @PostMapping("/{id}/test-cases")
     public TestCaseUploadResult uploadTests(@PathVariable long id, @Valid @RequestBody TestCaseUploadRequest req) {
         Problem p = problems.findById(id).orElseThrow(NotFoundException::new);

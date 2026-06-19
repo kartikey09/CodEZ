@@ -50,6 +50,7 @@ public class User {
     public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
     public String getDisplayName() { return displayName; }
     public String getRole() { return role; }
+    public void setRole(String role) { this.role = role; }
     public boolean isActive() { return active; }
     public void setActive(boolean active) { this.active = active; }
     public boolean isMustChangePassword() { return mustChangePassword; }

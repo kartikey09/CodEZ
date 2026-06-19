@@ -27,7 +27,7 @@ public class SeedConfig {
         return args -> {
             record Seed(String loginId, String name, String role) { }
             List<Seed> seeds = List.of(
-                new Seed("admin", "Admin", "MonsterPipeLinePunch"),
+                new Seed("admin", "Admin", "admin"),
                 new Seed("stud001", "Student One", "student"),
                 new Seed("stud002", "Student Two", "student"),
                 new Seed("stud003", "Student Three", "student"),
@@ -39,6 +39,7 @@ public class SeedConfig {
                 String pw = randomPassword(rng, 10);
                 users.findByLoginId(s.loginId()).ifPresentOrElse(existing -> {
                     existing.setPasswordHash(encoder.encode(pw));
+                    existing.setRole(s.role());
                     existing.setMustChangePassword(true);
                     users.save(existing);
                     System.out.println(s.loginId() + "\t" + pw + "\t[" + s.role() + "] (reset)");

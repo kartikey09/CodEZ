@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 
 @RestController
-@RequestMapping("/api/admi/contests")
+@RequestMapping("/api/admin/contests")
 public class AdminContestController {
     private final ContestRepository contests;
 

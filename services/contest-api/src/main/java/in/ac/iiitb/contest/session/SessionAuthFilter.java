@@ -60,6 +60,7 @@ public class SessionAuthFilter extends OncePerRequestFilter {
 
         if(!"admin".equals(user.role()) && AuthPaths.isAdminOnly(path)) {
             writeError(res, HttpServletResponse.SC_FORBIDDEN, "UNAUTHORIZED", "Admin role required");
+            return;
         }
         chain.doFilter(req, res);
     }
