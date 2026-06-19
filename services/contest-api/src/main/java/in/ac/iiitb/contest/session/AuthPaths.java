@@ -11,4 +11,9 @@ public final class AuthPaths {
                 || path.equals("/error")
                 || path.startsWith("/actuator/");
     }
+
+    /** Routes only an admin role may touch. */
+    public static boolean isAdminOnly(String path){
+        return path.equals("/api/admin") || path.startsWith("/api/admin/");
+    }
 }

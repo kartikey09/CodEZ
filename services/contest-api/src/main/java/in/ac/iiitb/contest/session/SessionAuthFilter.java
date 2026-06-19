@@ -1,9 +1,6 @@
 package in.ac.iiitb.contest.session;
 
-import java.io.IOException;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
-
 import in.ac.iiitb.contest.web.dto.ErrorResponse;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -12,6 +9,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.MediaType;
 import org.springframework.web.filter.OncePerRequestFilter;
+
+import java.io.IOException;
 
 /**
  * Validates the session cookie minted by auth-service on every contest-api
@@ -57,6 +56,10 @@ public class SessionAuthFilter extends OncePerRequestFilter {
             writeError(res, HttpServletResponse.SC_FORBIDDEN,
                     "PASSWORD_CHANGE_REQUIRED", "You must change your password before continuing");
             return;
+        }
+
+        if(!"admin".equals(user.role()) && AuthPaths.isAdminOnly(path)) {
+            writeError(res, HttpServletResponse.SC_FORBIDDEN, "UNAUTHORIZED", "Admin role required");
         }
         chain.doFilter(req, res);
     }
