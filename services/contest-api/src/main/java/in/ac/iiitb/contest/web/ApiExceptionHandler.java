@@ -1,8 +1,6 @@
 package in.ac.iiitb.contest.web;
 
-import in.ac.iiitb.contest.error.ContestNotStartedException;
-import in.ac.iiitb.contest.error.NoContestFoundException;
-import in.ac.iiitb.contest.error.NotFoundException;
+import in.ac.iiitb.contest.error.*;
 import in.ac.iiitb.contest.web.dto.ErrorResponse;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
@@ -53,5 +51,43 @@ public class ApiExceptionHandler {
     public ResponseEntity<ErrorResponse> conflict() {
         return ResponseEntity.status(HttpStatus.CONFLICT)
             .body(new ErrorResponse("CONFLICT", "Resource already exists or violates a unique constraint"));
+    }
+
+    // ----- submission admission rejections -----
+
+    @ExceptionHandler(LanguageNotAllowedException.class)
+    public ResponseEntity<ErrorResponse> badLanguage() {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+            .body(new ErrorResponse("LANGUAGE_NOT_ALLOWED", "That language is not accepted for this contest"));
+    }
+
+    @ExceptionHandler(SourceTooLargeException.class)
+    public ResponseEntity<ErrorResponse> tooLarge() {
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+            .body(new ErrorResponse("SOURCE_TOO_LARGE", "Source exceeds the size limit"));
+    }
+
+    @ExceptionHandler(ContestEndedException.class)
+    public ResponseEntity<ErrorResponse> ended() {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+            .body(new ErrorResponse("CONTEST_ENDED", "The contest window has closed"));
+    }
+
+    @ExceptionHandler(SubmissionInFlightException.class)
+    public ResponseEntity<ErrorResponse> inFlight() {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+            .body(new ErrorResponse("SUBMISSION_IN_FLIGHT", "A previous submission is still being judged"));
+    }
+
+    @ExceptionHandler(CooldownActiveException.class)
+    public ResponseEntity<ErrorResponse> cooldown() {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+            .body(new ErrorResponse("COOLDOWN_ACTIVE", "Please wait before submitting again"));
+    }
+
+    @ExceptionHandler(SubmissionDatabaseException.class)
+    public ResponseEntity<ErrorResponse> SubmissionDatabaseException(RuntimeException e) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+            .body(new ErrorResponse("DB FAILED TO SAVE", e.getMessage()));
     }
 }

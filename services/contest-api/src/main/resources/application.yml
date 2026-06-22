@@ -25,6 +25,13 @@ spring:
 app:
   session:
     ttl-hours: 8                      # must match auth-service so the sliding window is consistent
+  submission:
+    allowed-languages: [ c, cpp, java, python ]
+    max-source-bytes: 65536           # 64 KB hard cap (UTF-8 bytes)
+    cooldown-ms: 10000                # min gap between a user's submissions
+    inflight-ttl-seconds: 120         # safety TTL on the one-in-flight lock (orchestrator clears it on verdict)
+    grace-seconds: 5                  # leeway past ends_at for a buzzer-beater click
+    stream-key: subq
 
 management:
   endpoints:

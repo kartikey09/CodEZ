@@ -1,0 +1,67 @@
+# Judge0 CE — a self-contained judging stack with its OWN postgres + redis.
+# Keep it separate from deploy/docker-compose.dev.yml (the app's PG/Redis). Dev only.
+#
+#   cd deploy/judge0
+#   docker compose -f docker-compose.judge0.yml up -d
+#   curl -s localhost:2358/system_info | head        # sanity
+#
+# isolate (the sandbox Judge0 uses) needs cgroup v1 on this kernel. If workers crash-loop
+# with cgroup errors, apply the GRUB change INSIDE THE VM (see deploy/judge0/README notes
+# in DAY-05-06-RUNBOOK.md) — never touch the host bootloader.
+name: judge0
+
+x-logging: &default-logging
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+  server:
+    image: judge0/judge0:1.13.0
+    volumes:
+      - ./judge0.conf:/judge0.conf:ro
+    ports:
+      - "2358:2358"
+    privileged: true
+    restart: unless-stopped
+    depends_on:
+      - db
+      - redis
+    <<: *default-logging
+
+  workers:
+    image: judge0/judge0:1.13.0
+    command: ["./scripts/workers"]
+    volumes:
+      - ./judge0.conf:/judge0.conf:ro
+    privileged: true
+    restart: unless-stopped
+    depends_on:
+      - db
+      - redis
+    <<: *default-logging
+
+  db:
+    image: postgres:16
+    env_file: judge0.conf
+    volumes:
+      - judge0-postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    <<: *default-logging
+
+  redis:
+    image: redis:7
+    command:
+      [
+        "bash",
+        "-c",
+        'docker-entrypoint.sh --appendonly no --requirepass "$$REDIS_PASSWORD"',
+      ]
+    env_file: judge0.conf
+    restart: unless-stopped
+    <<: *default-logging
+
+volumes:
+  judge0-postgres-data:
