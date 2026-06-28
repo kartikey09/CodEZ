@@ -15,7 +15,7 @@
     <artifactId>orchestrator</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>orchestrator</name>
-    <description>Judge0 worker for the IIIT-B contest platform (Day 6: thin Judge0 client + contract spike)</description>
+    <description>Judge0 worker for the IIIT-B contest platform (Day 7: stream -> Judge0 -> verdict)</description>
 
     <properties>
         <java.version>21</java.version>
@@ -38,6 +38,22 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-json</artifactId>
+        </dependency>
+
+        <!-- Day 7: consume the subq stream, publish results, release the in-flight lock -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+        <!-- Day 7: read source/tests + write verdicts via JdbcTemplate (orchestrator does NOT own the schema) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jdbc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
         </dependency>
 
         <dependency>
@@ -65,8 +81,8 @@
                 <configuration>
                     <!-- The live Judge0 matrix is tagged 'judge0' and skipped by default (it needs a
                          running Judge0). Run it on demand:
-                         ./mvnw test -DexcludedGroups= -Dgroups=judge0 -->
-                    <excludedGroups>judge0</excludedGroups>
+                         ./mvnw test -DexcludedGroups= -Dgroups=judge0   (chaos IT helpers: -Dgroups=chaos) -->
+                    <excludedGroups>judge0,chaos</excludedGroups>
                 </configuration>
             </plugin>
             <plugin>

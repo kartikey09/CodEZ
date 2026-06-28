@@ -1,0 +1,41 @@
+spring:
+  application:
+    name: orchestrator
+  main:
+    web-application-type: none          # a worker, not a server
+  datasource:
+    url: jdbc:postgresql://localhost:5432/contest   # SAME db as contest-api; orchestrator only reads/writes, never migrates
+    username: contest
+    password: contest_dev_pw            # DEV ONLY
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+app:
+  judge0:
+    base-url: http://localhost:2358
+    auth-token: ""                      # set to judge0.conf AUTHN_TOKEN in prod
+    connect-timeout-ms: 2000
+    read-timeout-ms: 10000
+    max-retries: 3
+  worker:
+    stream-key: subq                    # must match contest-api's app.submission.stream-key
+    group: workers
+    consumer: ${HOSTNAME:orchestrator-1}
+    block-ms: 5000                      # XREADGROUP BLOCK window
+    batch-count: 10                     # max records per read
+    poll-initial-backoff-ms: 150        # Judge0 result polling backoff (grows to max)
+    poll-max-backoff-ms: 1500
+    poll-max-wait-ms: 30000             # give up polling a token after this -> IE
+    compile-output-max-bytes: 8192      # keep <= 8 KB of compiler stderr on CE
+    inflight-key-prefix: "inflight:"    # must match contest-api's in-flight lock key
+    user-channel-prefix: "ch:user:"     # pub/sub channel the realtime service (Day 10) will consume
+    batch-size: 1                       # tests submitted per Judge0 /submissions/batch call; 1 = one-at-a-time (Day-7 behaviour)
+    reclaim-interval-ms: 30000          # how often the reclaimer sweeps the pending-entries list (PEL)
+    reclaim-min-idle-ms: 90000          # only steal a job whose last delivery is older than this (a dead/stuck worker)
+    reclaim-batch: 50                   # max pending entries inspected per sweep
+    max-deliveries: 3                   # delivery count past which a job is a poison pill -> verdict IE
+    breaker-failure-threshold: 5        # consecutive Judge0 transport failures before the circuit opens
+    breaker-open-ms: 15000              # stay open this long before allowing a single probe
+    breaker-pause-ms: 1000              # how long the read loop sleeps each tick while the circuit is open
