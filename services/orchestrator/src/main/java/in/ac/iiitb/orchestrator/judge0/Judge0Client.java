@@ -1,21 +1,19 @@
 package in.ac.iiitb.orchestrator.judge0;
 
-import java.nio.charset.StandardCharsets;
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Base64;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.function.Supplier;
-
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.boot.web.client.ClientHttpRequestFactories;
 import org.springframework.boot.web.client.ClientHttpRequestFactorySettings;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
+
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.*;
+import java.util.function.Supplier;
 
 /**
  * Thin, synchronous Judge0 CE client. Responsibilities kept deliberately small:
@@ -26,6 +24,9 @@ import org.springframework.web.client.RestClient;
  *   - the X-Auth-Token header when a token is configured.
  *
  * It does NOT poll-until-done or map verdicts; callers (the Day-7 worker, the live IT) decide that.
+ *
+ * Note: bodies are pre-serialized to byte[] so Java's HttpURLConnection sends Content-Length
+ * (not chunked transfer encoding). Judge0's server rejects chunked requests.
  */
 @Component
 public class Judge0Client {
@@ -34,6 +35,7 @@ public class Judge0Client {
 
     private final RestClient http;
     private final int maxRetries;
+    private final ObjectMapper json = new ObjectMapper();
 
     public Judge0Client(Judge0Properties props) {
         ClientHttpRequestFactorySettings settings = ClientHttpRequestFactorySettings.DEFAULTS
@@ -50,14 +52,32 @@ public class Judge0Client {
         this.maxRetries = Math.max(1, props.maxRetries());
     }
 
-    /** Enqueue a single submission; returns its token. */
+    /**
+     * Submits a single job to Judge0 asynchronously and returns a tracking token.
+     * * How this works under the hood:
+     * 1. The "Wait = False" Flag: By setting queryParam("wait", "false"), we tell Judge0
+     * not to hold the HTTP connection open while it compiles and runs the code.
+     * Instead, Judge0 instantly replies with a "receipt" so we can move on.
+     * * 2. The Token: The returned string is an Asynchronous Job Tracking ID (typically a
+     * standard UUID like "d601b643-fc0c-4e8f-b9bd-50ec8e7456d2"). It acts as a claim
+     * check, not a security/auth token.
+     * * 3. The Lifecycle connection:
+     * - Submit: This method sends the POST request and returns the UUID token.
+     * - Poll: The worker passes this token into pollUntilDone(token).
+     * - Retrieve: pollUntilDone uses this token to make GET requests every few
+     * hundred milliseconds until Judge0 indicates the execution is complete.
+     *
+     * @param submission The payload containing the source code, language, and test case.
+     * @return The UUID token used to poll for the result.
+     */
     public String submit(Judge0Submission submission) {
         Judge0TokenResponse res = withRetry(() -> http.post()
                 .uri(uri -> uri.path("/submissions")
                         .queryParam("base64_encoded", "true")
                         .queryParam("wait", "false")
                         .build())
-                .body(toWire(submission))
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(toWireBytes(toWire(submission)))
                 .retrieve()
                 .body(Judge0TokenResponse.class));
         return res.token();
@@ -70,7 +90,8 @@ public class Judge0Client {
                 .uri(uri -> uri.path("/submissions/batch")
                         .queryParam("base64_encoded", "true")
                         .build())
-                .body(Map.of("submissions", wire))
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(toWireBytes(Map.of("submissions", wire)))
                 .retrieve()
                 .body(Judge0TokenResponse[].class));
         return Arrays.stream(res).map(Judge0TokenResponse::token).toList();
@@ -132,6 +153,14 @@ public class Judge0Client {
         return m;
     }
 
+    private byte[] toWireBytes(Object body) {
+        try {
+            return json.writeValueAsBytes(body);
+        } catch (JsonProcessingException e) {
+            throw new Judge0Exception("Failed to serialize Judge0 request body", e);
+        }
+    }
+
     private Judge0Result decode(Judge0Result r) {
         if (r == null) {
             return null;
@@ -148,7 +177,9 @@ public class Judge0Client {
         if (s == null || s.isEmpty()) {
             return s;
         }
-        return new String(Base64.getDecoder().decode(s), StandardCharsets.UTF_8);
+        // Judge0 uses MIME-style base64: embedded newlines every 64 chars plus a trailing newline.
+        // getMimeDecoder ignores all whitespace, covering both cases.
+        return new String(Base64.getMimeDecoder().decode(s), StandardCharsets.UTF_8);
     }
 
     // ---- retry ----

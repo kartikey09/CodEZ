@@ -56,7 +56,7 @@ public class ProblemController {
     }
 
     private Contest currentContest() {
-        return contests.findFirstByState("running").orElseThrow(NotFoundException::new);
+        return contests.findFirstByStateOrderByStartsAtDesc("running").orElseThrow(NotFoundException::new);
     }
 
     private void requireStarted(Contest contest) {
