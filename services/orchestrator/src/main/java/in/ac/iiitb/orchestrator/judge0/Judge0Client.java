@@ -1,7 +1,10 @@
 package in.ac.iiitb.orchestrator.judge0;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.boot.web.client.ClientHttpRequestFactories;
 import org.springframework.boot.web.client.ClientHttpRequestFactorySettings;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
@@ -21,6 +24,9 @@ import java.util.function.Supplier;
  *   - the X-Auth-Token header when a token is configured.
  *
  * It does NOT poll-until-done or map verdicts; callers (the Day-7 worker, the live IT) decide that.
+ *
+ * Note: bodies are pre-serialized to byte[] so Java's HttpURLConnection sends Content-Length
+ * (not chunked transfer encoding). Judge0's server rejects chunked requests.
  */
 @Component
 public class Judge0Client {
@@ -29,6 +35,7 @@ public class Judge0Client {
 
     private final RestClient http;
     private final int maxRetries;
+    private final ObjectMapper json = new ObjectMapper();
 
     public Judge0Client(Judge0Properties props) {
         ClientHttpRequestFactorySettings settings = ClientHttpRequestFactorySettings.DEFAULTS
@@ -69,7 +76,8 @@ public class Judge0Client {
                         .queryParam("base64_encoded", "true")
                         .queryParam("wait", "false")
                         .build())
-                .body(toWire(submission))
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(toWireBytes(toWire(submission)))
                 .retrieve()
                 .body(Judge0TokenResponse.class));
         return res.token();
@@ -82,7 +90,8 @@ public class Judge0Client {
                 .uri(uri -> uri.path("/submissions/batch")
                         .queryParam("base64_encoded", "true")
                         .build())
-                .body(Map.of("submissions", wire))
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(toWireBytes(Map.of("submissions", wire)))
                 .retrieve()
                 .body(Judge0TokenResponse[].class));
         return Arrays.stream(res).map(Judge0TokenResponse::token).toList();
@@ -144,6 +153,14 @@ public class Judge0Client {
         return m;
     }
 
+    private byte[] toWireBytes(Object body) {
+        try {
+            return json.writeValueAsBytes(body);
+        } catch (JsonProcessingException e) {
+            throw new Judge0Exception("Failed to serialize Judge0 request body", e);
+        }
+    }
+
     private Judge0Result decode(Judge0Result r) {
         if (r == null) {
             return null;
@@ -160,7 +177,9 @@ public class Judge0Client {
         if (s == null || s.isEmpty()) {
             return s;
         }
-        return new String(Base64.getDecoder().decode(s), StandardCharsets.UTF_8);
+        // Judge0 uses MIME-style base64: embedded newlines every 64 chars plus a trailing newline.
+        // getMimeDecoder ignores all whitespace, covering both cases.
+        return new String(Base64.getMimeDecoder().decode(s), StandardCharsets.UTF_8);
     }
 
     // ---- retry ----

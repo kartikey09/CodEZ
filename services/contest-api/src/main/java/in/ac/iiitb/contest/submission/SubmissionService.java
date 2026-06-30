@@ -54,7 +54,7 @@ public class SubmissionService {
             throw new SourceTooLargeException();
         }
         // 3. running contest + open window (+ grace past the end)
-        Contest contest = contests.findFirstByState("running").orElseThrow(NoContestFoundException::new);
+        Contest contest = contests.findFirstByStateOrderByStartsAtDesc("running").orElseThrow(NoContestFoundException::new);
         Instant now = Instant.now();
         if (now.isBefore(contest.getStartsAt())) {
             throw new ContestNotStartedException();

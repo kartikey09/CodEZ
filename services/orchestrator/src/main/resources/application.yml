@@ -32,10 +32,10 @@ app:
     inflight-key-prefix: "inflight:"    # must match contest-api's in-flight lock key
     user-channel-prefix: "ch:user:"     # pub/sub channel the realtime service (Day 10) will consume
     batch-size: 1                       # tests submitted per Judge0 /submissions/batch call; 1 = one-at-a-time (Day-7 behaviour)
-    reclaim-interval-ms: 30000          # how often the reclaimer sweeps the pending-entries list (PEL)
-    reclaim-min-idle-ms: 90000          # only steal a job whose last delivery is older than this (a dead/stuck worker)
+    reclaim-interval-ms: 30000          # how often the reclaimer sweeps the PEL
+    reclaim-min-idle-ms: 90000         # only claim entries idle for at least this long
     reclaim-batch: 50                   # max pending entries inspected per sweep
     max-deliveries: 3                   # delivery count past which a job is a poison pill -> verdict IE
     breaker-failure-threshold: 5        # consecutive Judge0 transport failures before the circuit opens
-    breaker-open-ms: 15000              # stay open this long before allowing a single probe
+    breaker-open-ms: 15000             # how long the circuit stays open before a probe is allowed
     breaker-pause-ms: 1000              # how long the read loop sleeps each tick while the circuit is open

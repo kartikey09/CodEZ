@@ -30,7 +30,7 @@ public class ContestSeedConfig {
                                          ProblemRepository problems,
                                          TestCaseRepository tests) {
         return args -> {
-            if (contests.findFirstByState("running").isPresent()) {
+            if (contests.findFirstByStateOrderByStartsAtDesc("running").isPresent()) {
                 System.out.println("[seed] a running contest already exists — skipping");
                 return;
             }
