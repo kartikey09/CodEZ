@@ -1,0 +1,29 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: realtime
+  data:
+    redis:
+      host: localhost
+      port: 6379                      # the APP Redis (same one auth/contest-api/worker use)
+
+app:
+  realtime:
+    verdict-channel-pattern: "ch:user:*"        # the worker's per-user verdict pings
+    verdict-channel-prefix: "ch:user:"
+    standings-channel-pattern: "ch:standings:*" # contest-api publishes refreshed boards here
+    standings-channel-prefix: "ch:standings:"
+    snapshot-key-prefix: "standings:"           # initial board on connect: standings:{id}:snapshot
+    session-ttl-hours: 8                          # must match auth/contest-api sliding window
+    allowed-origin-patterns:                      # WS handshake carries the sid cookie -> need real origins, not "*"
+      - "http://localhost:*"
+    send-time-limit-ms: 5000                      # per-session send budget (ConcurrentWebSocketSessionDecorator)
+    send-buffer-bytes: 524288                     # 512 KB outbound buffer per session
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

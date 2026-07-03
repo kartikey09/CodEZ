@@ -15,7 +15,7 @@ CREATE TABLE contests (
 CREATE TABLE problems (
     id                BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     contest_id        BIGINT NOT NULL REFERENCES contests(id),
-    label             TEXT   NOT NULL,               -- 'A'..'F'
+    label             TEXT   NOT NULL,               -- 'A'..'F' just like CodeForces
     title             TEXT   NOT NULL,
     statement_md      TEXT   NOT NULL,
     time_limit_ms     INT    NOT NULL DEFAULT 1000,

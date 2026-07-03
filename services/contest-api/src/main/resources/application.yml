@@ -32,6 +32,11 @@ app:
     inflight-ttl-seconds: 120         # safety TTL on the one-in-flight lock (orchestrator clears it on verdict)
     grace-seconds: 5                  # leeway past ends_at for a buzzer-beater click
     stream-key: subq
+  scoring:
+    key-prefix: "standings:"          # Redis keys per contest: standings:{id}, :detail, :fresh
+    penalty-per-wrong: 20             # ICPC minutes added per rejected attempt made before the AC
+    cache-ttl-ms: 2000                # recompute the board from submissions at most this often
+    count-compile-errors: true        # does a CE before the AC count as a penalty attempt? (classic ICPC: yes)
 
 management:
   endpoints:
