@@ -19,6 +19,7 @@ import java.io.IOException;
  *   - public paths pass through,
  *   - everything else requires a valid session (401 otherwise),
  *   - a must-change user is confined to the change-password allowlist (403 otherwise).
+ *   - admin-only paths (/auth/admin/**) require the admin role (403 otherwise).
  */
 @Component
 public class SessionAuthFilter extends OncePerRequestFilter {
@@ -66,6 +67,10 @@ public class SessionAuthFilter extends OncePerRequestFilter {
         if (user.mustChangePassword() && !AuthPaths.allowedDuringMustChange(path)) {
             writeError(res, HttpServletResponse.SC_FORBIDDEN,
                 "PASSWORD_CHANGE_REQUIRED", "You must change your password before continuing");
+            return;
+        }
+        if (AuthPaths.isAdminOnly(path) && !"admin".equals(user.role())) {
+            writeError(res, HttpServletResponse.SC_FORBIDDEN, "FORBIDDEN", "Admin role required");
             return;
         }
         chain.doFilter(req, res);

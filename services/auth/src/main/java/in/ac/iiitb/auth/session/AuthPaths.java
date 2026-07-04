@@ -22,4 +22,8 @@ public final class AuthPaths {
             || path.equals("/auth/logout")
             || path.equals("/auth/change-password");
     }
+
+    public static boolean isAdminOnly(String path) {
+        return path.equals("/auth/admin") || path.startsWith("/auth/admin/");
+    }
 }

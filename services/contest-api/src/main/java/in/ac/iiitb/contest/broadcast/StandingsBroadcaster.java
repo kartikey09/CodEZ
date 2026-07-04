@@ -1,14 +1,6 @@
 package in.ac.iiitb.contest.broadcast;
 
-import java.time.Duration;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
-
 import in.ac.iiitb.contest.scoring.ScoreboardService;
 import in.ac.iiitb.contest.scoring.ScoringProperties;
 import in.ac.iiitb.contest.scoring.StandingsResponse;
@@ -16,6 +8,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
+
+import java.time.Duration;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Bridges Day-9 scoring to Day-10 push. When a contest's submissions change, this recomputes the board
@@ -56,7 +55,7 @@ public class StandingsBroadcaster {
             if (existing != null) {
                 existing.cancel(false);
             }
-            return scheduler.schedule(() -> publishNow(cid), props.debounceMs(), TimeUnit.MILLISECONDS);
+            return scheduler.schedule(() -> publishNow(cid), props.debounceMs(), TimeUnit.MILLISECONDS);    //dbounce time, the unit in which the time is given
         });
     }
 

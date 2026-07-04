@@ -1,9 +1,6 @@
 package in.ac.iiitb.auth.web;
 
-import in.ac.iiitb.auth.error.AccountDisabledException;
-import in.ac.iiitb.auth.error.CurrentPasswordIncorrectException;
-import in.ac.iiitb.auth.error.InvalidCredentialsException;
-import in.ac.iiitb.auth.error.UnauthorizedException;
+import in.ac.iiitb.auth.error.*;
 import in.ac.iiitb.auth.web.dto.ErrorResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -47,5 +44,26 @@ public class ApiExceptionHandler {
             .orElse("Validation failed");
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
             .body(new ErrorResponse("VALIDATION_ERROR", msg));
+    }
+
+    @ExceptionHandler(LoginIdTakenException.class)
+    public ResponseEntity<ErrorResponse> loginIdTaken() {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+            .body(new ErrorResponse("LOGIN_ID_TAKEN", "A user with that login id already exists"));
+    }
+    @ExceptionHandler(UserNotFoundException.class)
+    public ResponseEntity<ErrorResponse> userNotFound() {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+            .body(new ErrorResponse("USER_NOT_FOUND", "No such user"));
+    }
+    @ExceptionHandler(InvalidRoleException.class)
+    public ResponseEntity<ErrorResponse> invalidRole() {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+            .body(new ErrorResponse("INVALID_ROLE", "Role must be 'student' or 'admin'"));
+    }
+    @ExceptionHandler(SelfModificationException.class)
+    public ResponseEntity<ErrorResponse> selfModification() {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+            .body(new ErrorResponse("SELF_MODIFICATION", "You cannot deactivate or demote your own account"));
     }
 }

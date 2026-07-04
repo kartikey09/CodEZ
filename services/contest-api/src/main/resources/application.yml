@@ -37,6 +37,11 @@ app:
     penalty-per-wrong: 20             # ICPC minutes added per rejected attempt made before the AC
     cache-ttl-ms: 2000                # recompute the board from submissions at most this often
     count-compile-errors: true        # does a CE before the AC count as a penalty attempt? (classic ICPC: yes)
+  broadcast:
+    verdict-channel-pattern: "ch:user:*"    # listen to the worker's verdict pings (no worker change)
+    standings-channel-prefix: "ch:standings:"   # publish refreshed boards here for realtime to relay
+    debounce-ms: 500                        # coalesce a burst of verdicts in a contest into one recompute
+    broadcast-limit: 500
 
 management:
   endpoints:
