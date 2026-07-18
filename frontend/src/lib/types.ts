@@ -52,18 +52,39 @@ export type SubmissionStatus = 'queued' | 'running' | 'done'
 /** submissions.verdict, set once status === "done". */
 export type Verdict = 'AC' | 'WA' | 'TLE' | 'MLE' | 'RE' | 'CE' | 'IE'
 
-/** GET /api/submissions/{id} (SubmissionStatusResponse). */
+/** submissions.kind: a real graded attempt vs. a practice Run against sample tests only. */
+export type SubmissionKind = 'submit' | 'run'
+
+/**
+ * One test's outcome in a Run's breakdown. `index` is a 1..N position, never the real hidden
+ * test_cases.ordinal — only ever populated for kind === 'run' rows (samples only).
+ */
+export interface TestResultDto {
+  index: number
+  verdict: Verdict
+  execTimeMs: number | null
+  memoryKb: number | null
+}
+
+/**
+ * GET /api/submissions/{id} (SubmissionStatusResponse). No raw test ordinal is ever returned.
+ * `passedTests`/`totalTests` back the "X of Y passed" display for both kinds; `tests` is a
+ * per-test breakdown that is only ever non-empty for kind === 'run'.
+ */
 export interface SubmissionStatusResponse {
   id: number
   problemId: number
   language: string
   status: SubmissionStatus
   verdict: Verdict | null
-  failedTest: number | null
+  kind: SubmissionKind
+  passedTests: number | null
+  totalTests: number | null
   execTimeMs: number | null
   memoryKb: number | null
   createdAt: string
   judgedAt: string | null
+  tests: TestResultDto[]
 }
 
 /** GET /api/submissions/mine row (SubmissionSummary). */
@@ -141,13 +162,22 @@ export interface CreateContestRequest {
   state: ContestState
 }
 
-/** 201 body from POST /api/admin/contests (ContestResponse). */
+/** 201 body from POST /api/admin/contests (ContestResponse); also each row of GET /api/contests. */
 export interface ContestResponse {
   id: number
   title: string
   startsAt: string
   endsAt: string
   state: ContestState
+}
+
+/** GET /api/contests page (ContestPageResponse). Zero-indexed, newest contest first. */
+export interface ContestPageResponse {
+  items: ContestResponse[]
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
 }
 
 /** POST /api/admin/problems body (CreateProblemRequest). Limits <= 0 get server defaults (1000ms / 256MB). */
@@ -233,4 +263,31 @@ export interface ResetResult {
   id: number
   loginId: string
   initialPassword: string
+}
+
+// ----- admin contest control + announcements (contest-api, Day 13) -----
+
+/** A contest row for the admin control page (ContestResponse via GET /api/admin/contests). */
+export interface AdminContest {
+  id: number
+  title: string
+  startsAt: string
+  endsAt: string
+  state: string // draft | published | running | finished
+}
+
+/** Partial contest update (UpdateContestRequest) — send only the fields you change. */
+export interface UpdateContest {
+  startsAt?: string
+  endsAt?: string
+  state?: string
+}
+
+/** An announcement (AnnouncementView) shown in the student banner / admin list. */
+export interface Announcement {
+  id: number
+  contestId: number
+  message: string
+  active: boolean
+  createdAt: string
 }

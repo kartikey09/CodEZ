@@ -8,6 +8,7 @@ spring:
     redis:
       host: localhost
       port: 6379                      # the APP Redis (same one auth/contest-api/worker use)
+      password: e0245a7dc1216ca16ad4d5a7abf5ecb1313cd35b   # DEV ONLY — must match contest-redis's --requirepass
 
 app:
   realtime:

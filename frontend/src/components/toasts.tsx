@@ -34,7 +34,7 @@ export function Toasts() {
       {toasts.map((t) => (
         <div
           key={t.key}
-          className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 shadow-lg"
+          className="flex items-center gap-3 rounded-lg border border-border glass px-4 py-3 shadow-lg"
         >
           <VerdictBadge verdict={t.verdict} />
           <div className="text-sm">

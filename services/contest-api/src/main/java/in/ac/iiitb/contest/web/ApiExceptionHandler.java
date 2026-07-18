@@ -85,9 +85,23 @@ public class ApiExceptionHandler {
             .body(new ErrorResponse("COOLDOWN_ACTIVE", "Please wait before submitting again"));
     }
 
+    @ExceptionHandler(RunRateLimitExceededException.class)
+    public ResponseEntity<ErrorResponse> runRateLimited(RunRateLimitExceededException e) {
+        long retryAfter = e.retryAfterSeconds();
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+            .header("Retry-After", Long.toString(retryAfter))
+            .body(new ErrorResponse("RUN_RATE_LIMITED",
+                "Too many runs — please wait " + retryAfter + "s before trying again", (int) retryAfter));
+    }
+
     @ExceptionHandler(SubmissionDatabaseException.class)
     public ResponseEntity<ErrorResponse> SubmissionDatabaseException(RuntimeException e) {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
             .body(new ErrorResponse("DB FAILED TO SAVE", e.getMessage()));
+    }
+    @ExceptionHandler(InvalidContestUpdateException.class)
+    public ResponseEntity<ErrorResponse> invalidContestUpdate(InvalidContestUpdateException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+            .body(new ErrorResponse("INVALID_CONTEST_UPDATE", ex.getMessage()));
     }
 }

@@ -78,7 +78,7 @@ export function Leaderboard() {
       <div className="max-w-5xl mx-auto">
         <div className="flex items-center justify-between mb-8 gap-4 flex-wrap">
           <div className="flex items-center gap-3">
-            <h2 className="text-3xl font-bold text-white tracking-tight">Leaderboard</h2>
+            <h2 className="text-3xl font-bold text-foreground tracking-tight">Leaderboard</h2>
             {board && (
               <span
                 className={`inline-flex items-center gap-1.5 rounded border px-2 py-0.5 text-xs font-mono ${
@@ -117,15 +117,15 @@ export function Leaderboard() {
             <Loader2 className="animate-spin h-8 w-8 text-accent" />
           </div>
         ) : error ? (
-          <div className="text-center text-destructive py-12 bg-card rounded-2xl border border-border">{error}</div>
+          <div className="text-center text-destructive py-12 glass rounded-2xl border border-border">{error}</div>
         ) : !board ? (
-          <div className="text-center text-muted-foreground py-12 bg-card rounded-2xl border border-border">
+          <div className="text-center text-muted-foreground py-12 glass rounded-2xl border border-border">
             Enter a contest ID and press Load.
           </div>
         ) : (
           <>
           {mine && (
-            <div className="mb-6 bg-card border border-accent/40 rounded-xl px-5 py-4 flex items-center gap-8 flex-wrap">
+            <div className="mb-6 glass border border-accent/40 rounded-xl px-5 py-4 flex items-center gap-8 flex-wrap">
               <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">My standing</span>
               <div className="flex items-center gap-6 text-sm">
                 <span>

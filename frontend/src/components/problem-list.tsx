@@ -38,14 +38,14 @@ export function ProblemList({ onSelectProblem }: { onSelectProblem: (id: number)
   return (
     <div className="flex-1 w-full overflow-y-auto p-8 font-sans">
       <div className="max-w-4xl mx-auto">
-        <h2 className="text-3xl font-bold mb-8 text-white tracking-tight">Problems</h2>
+        <h2 className="text-3xl font-bold mb-8 text-foreground tracking-tight">Problems</h2>
 
         {loading ? (
           <div className="flex items-center justify-center h-40">
             <Loader2 className="animate-spin h-8 w-8 text-accent" />
           </div>
         ) : notice ? (
-          <div className="flex flex-col items-center justify-center gap-3 text-center text-muted-foreground py-16 bg-card rounded-2xl border border-border">
+          <div className="flex flex-col items-center justify-center gap-3 text-center text-muted-foreground py-16 glass rounded-2xl border border-border">
             {notice.kind === 'waiting' ? (
               <Clock size={28} className="text-accent" />
             ) : (
@@ -59,14 +59,14 @@ export function ProblemList({ onSelectProblem }: { onSelectProblem: (id: number)
               <div
                 key={prob.id}
                 onClick={() => onSelectProblem(prob.id)}
-                className="group relative flex items-center justify-between p-6 bg-card border border-border rounded-2xl cursor-pointer hover:border-accent/50 hover:bg-secondary/40 transition-all overflow-hidden"
+                className="group relative flex items-center justify-between p-6 glass border border-border rounded-2xl cursor-pointer hover:border-accent/50 hover:bg-secondary/40 transition-all overflow-hidden"
               >
                 <div className="absolute left-0 top-0 bottom-0 w-1 bg-accent opacity-0 group-hover:opacity-100 transition-opacity" />
                 <div className="flex items-center gap-6">
                   <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center text-lg font-bold text-accent shrink-0">
                     {prob.label}
                   </div>
-                  <h3 className="text-lg font-bold text-gray-200 group-hover:text-accent transition-colors">
+                  <h3 className="text-lg font-bold text-foreground group-hover:text-accent transition-colors">
                     {prob.title}
                   </h3>
                 </div>
@@ -76,7 +76,7 @@ export function ProblemList({ onSelectProblem }: { onSelectProblem: (id: number)
               </div>
             ))}
             {problems.length === 0 && (
-              <div className="text-center text-muted-foreground py-12 bg-card rounded-2xl border border-border">
+              <div className="text-center text-muted-foreground py-12 glass rounded-2xl border border-border">
                 No problems in this contest.
               </div>
             )}

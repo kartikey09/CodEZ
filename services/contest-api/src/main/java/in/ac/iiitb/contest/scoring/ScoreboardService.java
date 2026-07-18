@@ -125,7 +125,7 @@ public class ScoreboardService {
     public int rebuild(long contestId) {
         Contest contest = contests.findById(contestId).orElseThrow(NotFoundException::new);
         List<Problem> probs = problems.findByContestIdOrderByLabel(contestId);
-        List<Submission> done = submissions.findByContestIdAndStatusOrderByCreatedAtAsc(contestId, "done");
+        List<Submission> done = submissions.findByContestIdAndStatusAndKindOrderByCreatedAtAsc(contestId, "done", "submit");
 
         Map<Long, List<Attempt>> byUser = new LinkedHashMap<>();
         for (Submission s : done) {

@@ -1,11 +1,17 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/atom-one-dark.css'
-import { RotateCcw, Loader2, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react'
+import { RotateCcw, Loader2, CheckCircle2, XCircle, AlertTriangle, Play } from 'lucide-react'
 import { api, ApiError } from '@/lib/api'
 import type { Language, SubmissionStatusResponse, Verdict } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { useRealtime } from '@/lib/realtime'
+
+// Run's own rate limit, independent of Submit's cooldown: max 3 per rolling 12s window.
+// This mirrors the backend's lazy fixed-window algorithm exactly (RunRateLimiter) purely for
+// responsive UX — the server call is always the authoritative check; a 429 resyncs this state.
+const RUN_WINDOW_MS = 12_000
+const RUN_MAX_PER_WINDOW = 3
 
 const MAX_SOURCE_BYTES = 65536 // matches app.submission.max-source-bytes
 
@@ -64,10 +70,12 @@ const VERDICT_META: Record<Verdict, { label: string; tone: 'ok' | 'bad' | 'warn'
 const codeKey = (problemId: number, lang: Language) => `codez:code:${problemId}:${lang}`
 const utf8Bytes = (s: string) => new TextEncoder().encode(s).length
 
+type Action = 'submit' | 'run'
+
 type Phase =
   | { kind: 'idle' }
-  | { kind: 'submitting' }
-  | { kind: 'judging'; id: number; status: string }
+  | { kind: 'submitting'; action: Action }
+  | { kind: 'judging'; id: number; status: string; action: Action }
   | { kind: 'done'; result: SubmissionStatusResponse }
   | { kind: 'error'; message: string }
 
@@ -82,10 +90,13 @@ export function CodeEditor({ problemId }: { problemId: number }) {
   )
   const [showLangMenu, setShowLangMenu] = useState(false)
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' })
+  const [runRetryAt, setRunRetryAt] = useState<number | null>(null)
+  const [nowTick, setNowTick] = useState(() => Date.now())
 
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const highlightRef = useRef<HTMLPreElement>(null)
   const pollRef = useRef<number | null>(null)
+  const runWindowRef = useRef<{ start: number; count: number } | null>(null)
 
   const stopPolling = useCallback(() => {
     if (pollRef.current !== null) {
@@ -120,6 +131,35 @@ export function CodeEditor({ problemId }: { problemId: number }) {
   }, [code, hljsLang])
 
   useEffect(() => stopPolling, [stopPolling])
+
+  // Ticks while a Run rate-limit countdown is showing; stops once it elapses.
+  useEffect(() => {
+    if (runRetryAt == null) return
+    const t = window.setInterval(() => setNowTick(Date.now()), 250)
+    return () => window.clearInterval(t)
+  }, [runRetryAt])
+
+  const runRetrySecondsLeft = runRetryAt != null ? Math.max(0, Math.ceil((runRetryAt - nowTick) / 1000)) : 0
+  const runLimited = runRetrySecondsLeft > 0
+
+  /** Local mirror of the server's fixed-window limiter. Returns false if this click should be blocked. */
+  const registerRun = () => {
+    const now = Date.now()
+    const w = runWindowRef.current
+    if (!w || now - w.start >= RUN_WINDOW_MS) {
+      runWindowRef.current = { start: now, count: 1 }
+      return true
+    }
+    if (w.count < RUN_MAX_PER_WINDOW) {
+      w.count += 1
+      if (w.count >= RUN_MAX_PER_WINDOW) {
+        setRunRetryAt(w.start + RUN_WINDOW_MS)
+      }
+      return true
+    }
+    setRunRetryAt(w.start + RUN_WINDOW_MS)
+    return false
+  }
 
   // WS fast path: the realtime service pushes {submissionId, verdict} the moment the worker
   // judges it, often faster than the next poll tick. The frame itself is bare, so fetch the
@@ -166,7 +206,7 @@ export function CodeEditor({ problemId }: { problemId: number }) {
   }
 
   const poll = useCallback(
-    (id: number) => {
+    (id: number, action: Action) => {
       let attempts = 0
       const maxAttempts = 100 // ~2 min at 1.2s
       const tick = async () => {
@@ -181,7 +221,7 @@ export function CodeEditor({ problemId }: { problemId: number }) {
             setPhase({ kind: 'done', result: s })
             return
           }
-          setPhase({ kind: 'judging', id, status: s.status })
+          setPhase({ kind: 'judging', id, status: s.status, action })
           pollRef.current = window.setTimeout(() => void tick(), 1200)
         } catch (err) {
           setPhase({ kind: 'error', message: err instanceof ApiError ? err.message : 'Lost contact while judging.' })
@@ -192,18 +232,24 @@ export function CodeEditor({ problemId }: { problemId: number }) {
     [],
   )
 
-  const onSubmit = async () => {
+  const runAction = async (action: Action) => {
     stopPolling()
     if (utf8Bytes(code) > MAX_SOURCE_BYTES) {
       setPhase({ kind: 'error', message: `Source is over the ${MAX_SOURCE_BYTES / 1024} KB limit.` })
       return
     }
-    setPhase({ kind: 'submitting' })
+    setPhase({ kind: 'submitting', action })
     try {
-      const { submissionId } = await api.submit(problemId, language, code)
-      setPhase({ kind: 'judging', id: submissionId, status: 'queued' })
-      poll(submissionId)
+      const { submissionId } =
+        action === 'submit'
+          ? await api.submit(problemId, language, code)
+          : await api.runProblem(problemId, language, code)
+      setPhase({ kind: 'judging', id: submissionId, status: 'queued', action })
+      poll(submissionId, action)
     } catch (err) {
+      if (action === 'run' && err instanceof ApiError && err.status === 429) {
+        setRunRetryAt(Date.now() + (err.retryAfterSeconds ?? 12) * 1000)
+      }
       setPhase({
         kind: 'error',
         message:
@@ -211,16 +257,28 @@ export function CodeEditor({ problemId }: { problemId: number }) {
             ? err.status === 0
               ? 'Cannot reach contest-api (:8080).'
               : err.message
-            : 'Submission failed.',
+            : action === 'submit'
+              ? 'Submission failed.'
+              : 'Run failed.',
       })
     }
+  }
+
+  const onSubmit = () => void runAction('submit')
+
+  const onRun = () => {
+    if (isBusy || runLimited || !registerRun()) return
+    void runAction('run')
   }
 
   const isBusy = phase.kind === 'submitting' || phase.kind === 'judging'
   const lineCount = code.split('\n').length
 
   return (
-    <div className="flex flex-col h-full bg-card border border-border rounded-lg overflow-hidden">
+    // Locked to the dark palette regardless of site theme: the syntax highlighter
+    // (atom-one-dark) needs a dark surface to stay legible, so this subtree always
+    // resolves the `--card`/`--border`/etc. tokens from the `.dark` scope below.
+    <div className="dark flex flex-col h-full bg-card border border-border rounded-lg overflow-hidden">
       {/* Toolbar */}
       <div className="flex items-center justify-between px-4 h-[64px] border-b border-border/50 gap-4 bg-secondary/20 shrink-0">
         <div className="relative">
@@ -258,15 +316,45 @@ export function CodeEditor({ problemId }: { problemId: number }) {
           >
             <RotateCcw size={16} />
           </button>
+          <button
+            onClick={onRun}
+            disabled={isBusy || runLimited}
+            title={runLimited ? `Try again in ${runRetrySecondsLeft}s` : 'Run against the sample tests only'}
+            className="h-9 px-4 rounded-md border border-border text-foreground text-sm font-semibold hover:bg-secondary/60 disabled:opacity-40 disabled:cursor-not-allowed transition flex items-center gap-2"
+          >
+            {phase.kind === 'submitting' && phase.action === 'run' ? (
+              <>
+                <Loader2 size={16} className="animate-spin motion-reduce:animate-none" />
+                Running…
+              </>
+            ) : phase.kind === 'judging' && phase.action === 'run' ? (
+              <>
+                <Loader2 size={16} className="animate-spin motion-reduce:animate-none" />
+                Judging…
+              </>
+            ) : runLimited ? (
+              `Retry in ${runRetrySecondsLeft}s`
+            ) : (
+              <>
+                <Play size={16} />
+                Run
+              </>
+            )}
+          </button>
           <Button
-            onClick={() => void onSubmit()}
+            onClick={onSubmit}
             disabled={isBusy}
             className="bg-accent text-accent-foreground hover:bg-accent/90 font-semibold"
           >
-            {isBusy ? (
+            {phase.kind === 'submitting' && phase.action === 'submit' ? (
               <>
                 <Loader2 size={16} className="animate-spin motion-reduce:animate-none" />
-                {phase.kind === 'submitting' ? 'Submitting…' : 'Judging…'}
+                Submitting…
+              </>
+            ) : phase.kind === 'judging' && phase.action === 'submit' ? (
+              <>
+                <Loader2 size={16} className="animate-spin motion-reduce:animate-none" />
+                Judging…
               </>
             ) : (
               'Submit'
@@ -315,17 +403,17 @@ export function CodeEditor({ problemId }: { problemId: number }) {
 
 function ResultView({ phase }: { phase: Phase }) {
   if (phase.kind === 'idle') {
-    return <p className="text-sm text-muted-foreground italic">Submit your solution to see the verdict.</p>
+    return <p className="text-sm text-muted-foreground italic">Run against the samples, or submit your solution to see the verdict.</p>
   }
   if (phase.kind === 'submitting') {
-    return <p className="text-sm text-muted-foreground">Queuing your submission…</p>
+    return <p className="text-sm text-muted-foreground">{phase.action === 'run' ? 'Queuing your run…' : 'Queuing your submission…'}</p>
   }
   if (phase.kind === 'judging') {
     return (
       <div className="flex items-center gap-2 text-sm text-accent">
         <Loader2 size={16} className="animate-spin motion-reduce:animate-none" />
         <span>
-          Submission #{phase.id} — {phase.status}…
+          {phase.action === 'run' ? 'Run' : 'Submission'} #{phase.id} — {phase.status}…
         </span>
       </div>
     )
@@ -340,6 +428,10 @@ function ResultView({ phase }: { phase: Phase }) {
   }
 
   // done
+  if (phase.result.kind === 'run') {
+    return <RunResultView result={phase.result} />
+  }
+
   const r = phase.result
   const meta = r.verdict ? VERDICT_META[r.verdict] : { label: r.status, tone: 'warn' as const }
   const toneClass =
@@ -350,13 +442,50 @@ function ResultView({ phase }: { phase: Phase }) {
     <div className="flex flex-col gap-3">
       <div className={`flex items-center gap-2 text-base font-bold ${toneClass}`}>
         <Icon size={18} />
-        <span>{meta.label}</span>
+        <span>Verdict: {meta.label}</span>
       </div>
       <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground font-mono">
         <span>Submission #{r.id}</span>
-        {r.failedTest != null && <span>Failed on test {r.failedTest}</span>}
+        {r.totalTests != null && (
+          <span>
+            {r.passedTests ?? 0}/{r.totalTests} tests passed
+          </span>
+        )}
         {r.execTimeMs != null && <span>{r.execTimeMs} ms</span>}
         {r.memoryKb != null && <span>{(r.memoryKb / 1024).toFixed(1)} MB</span>}
+      </div>
+    </div>
+  )
+}
+
+/** Run's own results: per-sample-test breakdown (never shown for a real Submit). */
+function RunResultView({ result }: { result: SubmissionStatusResponse }) {
+  const passed = result.passedTests ?? 0
+  const total = result.totalTests ?? result.tests.length
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center gap-2 text-base font-bold text-foreground">
+        <span>
+          {passed}/{total} sample tests passed
+        </span>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        {result.tests.map((t) => {
+          const meta = VERDICT_META[t.verdict]
+          const ok = t.verdict === 'AC'
+          const Icon = ok ? CheckCircle2 : XCircle
+          return (
+            <div key={t.index} className={`flex items-center gap-2 text-sm ${ok ? 'text-green-500' : 'text-destructive'}`}>
+              <Icon size={15} className="shrink-0" />
+              <span className="font-mono">Sample {t.index}</span>
+              <span className="text-muted-foreground">{meta.label}</span>
+              {t.execTimeMs != null && (
+                <span className="text-xs text-muted-foreground/70 font-mono ml-auto">{t.execTimeMs} ms</span>
+              )}
+            </div>
+          )
+        })}
       </div>
     </div>
   )

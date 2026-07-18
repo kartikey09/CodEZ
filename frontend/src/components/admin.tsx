@@ -341,7 +341,7 @@ function UploadTests() {
       </p>
 
       {tests.map((t, i) => (
-        <div key={i} className="border border-border rounded-xl p-4 bg-card flex flex-col gap-3">
+        <div key={i} className="border border-border rounded-xl p-4 glass flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <span className="text-sm font-semibold text-foreground">
               Test #{(Number(startOrdinal) || 1) + i}
@@ -463,7 +463,7 @@ export function Admin() {
   return (
     <div className="flex-1 w-full overflow-y-auto p-8 font-sans">
       <div className="max-w-5xl mx-auto">
-        <h2 className="text-3xl font-bold text-white tracking-tight mb-2">Admin</h2>
+        <h2 className="text-3xl font-bold text-foreground tracking-tight mb-2">Admin</h2>
         <p className="text-sm text-muted-foreground mb-8">
           Build a contest: create the contest, add problems, upload test cases, and rebuild standings if needed.
         </p>

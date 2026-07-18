@@ -97,7 +97,7 @@ export function AdminUsers() {
     <div className="flex-1 w-full overflow-y-auto p-8 font-sans">
       <div className="max-w-5xl mx-auto">
         <div className="flex items-center justify-between mb-8">
-          <h2 className="text-3xl font-bold text-white tracking-tight">User management</h2>
+          <h2 className="text-3xl font-bold text-foreground tracking-tight">User management</h2>
           <div className="flex gap-2">
             <CreateUserButton
               onCreated={(cred) => {
@@ -131,7 +131,7 @@ export function AdminUsers() {
             <Loader2 className="animate-spin h-8 w-8 text-accent" />
           </div>
         ) : error ? (
-          <div className="text-center text-destructive py-12 bg-card rounded-2xl border border-border">{error}</div>
+          <div className="text-center text-destructive py-12 glass rounded-2xl border border-border">{error}</div>
         ) : (
           <div className="overflow-hidden rounded-xl border border-border">
             <table className="w-full text-sm">
@@ -267,7 +267,7 @@ function CreateUserButton({
   const valid = loginId.trim() !== '' && displayName.trim() !== ''
 
   return (
-    <div className="absolute right-8 mt-12 z-20 w-80 rounded-xl border border-border bg-card p-4 shadow-xl">
+    <div className="absolute right-8 mt-12 z-20 w-80 rounded-xl border border-border glass p-4 shadow-xl">
       <h3 className="text-sm font-semibold text-foreground mb-3">Create account</h3>
       <div className="space-y-2">
         <input
@@ -355,7 +355,7 @@ function ImportButton({
   }
 
   return (
-    <div className="absolute right-8 mt-12 z-20 w-96 rounded-xl border border-border bg-card p-4 shadow-xl">
+    <div className="absolute right-8 mt-12 z-20 w-96 rounded-xl border border-border glass p-4 shadow-xl">
       <h3 className="text-sm font-semibold text-foreground mb-1">Import roster (CSV)</h3>
       <p className="text-[11px] text-muted-foreground mb-3">
         Columns: <span className="font-mono">loginId,displayName,role</span> — role optional

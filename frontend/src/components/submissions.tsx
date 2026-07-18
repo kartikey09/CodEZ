@@ -66,16 +66,16 @@ export function Submissions() {
   return (
     <div className="flex-1 w-full overflow-y-auto p-8 font-sans">
       <div className="max-w-4xl mx-auto">
-        <h2 className="text-3xl font-bold mb-8 text-white tracking-tight">My submissions</h2>
+        <h2 className="text-3xl font-bold mb-8 text-foreground tracking-tight">My submissions</h2>
 
         {loading ? (
           <div className="flex items-center justify-center h-40">
             <Loader2 className="animate-spin h-8 w-8 text-accent" />
           </div>
         ) : error ? (
-          <div className="text-center text-destructive py-12 bg-card rounded-2xl border border-border">{error}</div>
+          <div className="text-center text-destructive py-12 glass rounded-2xl border border-border">{error}</div>
         ) : subs.length === 0 ? (
-          <div className="text-center text-muted-foreground py-12 bg-card rounded-2xl border border-border">
+          <div className="text-center text-muted-foreground py-12 glass rounded-2xl border border-border">
             No submissions yet.
           </div>
         ) : (

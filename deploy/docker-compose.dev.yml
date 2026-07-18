@@ -22,13 +22,16 @@ services:
   redis:
     image: redis:7
     container_name: contest-redis
-    command: ["redis-server", "--appendonly", "yes"]   # AOF persistence
+    # DEV ONLY password — sessions live here, so an unauthenticated Redis is a full
+    # auth bypass (anyone could HSET a forged sess:{sid} with role=admin). Every
+    # service's spring.data.redis.password must match this.
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "e0245a7dc1216ca16ad4d5a7abf5ecb1313cd35b"]
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"   # loopback only — every client runs on this host
     volumes:
       - redisdata:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "e0245a7dc1216ca16ad4d5a7abf5ecb1313cd35b", "ping"]
       interval: 5s
       timeout: 3s
       retries: 12

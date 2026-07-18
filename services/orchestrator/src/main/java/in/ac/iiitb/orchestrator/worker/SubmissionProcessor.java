@@ -1,5 +1,6 @@
 package in.ac.iiitb.orchestrator.worker;
 
+import java.util.List;
 import java.util.Map;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -68,7 +69,12 @@ public class SubmissionProcessor {
 
             store.markRunning(submissionId);
             ProblemRow problem = store.loadProblem(job.problemId());
-            JudgeOutcome outcome = judge.judge(job, problem, tests.get(job.problemId(), problem.testDataVersion()));
+            boolean isRun = "run".equals(job.kind());
+            List<TestRow> all = tests.get(job.problemId(), problem.testDataVersion());
+            // A Run job only ever judges sample tests — this filter is the structural guarantee
+            // that hidden tests are never touched (let alone exposed) by a practice run.
+            List<TestRow> toJudge = isRun ? all.stream().filter(TestRow::sample).toList() : all;
+            JudgeOutcome outcome = judge.judge(job, problem, toJudge, isRun);
             store.writeVerdict(submissionId, outcome);
 
             ack(record);
@@ -99,7 +105,7 @@ public class SubmissionProcessor {
             ack(record);
             return;
         }
-        store.writeVerdict(submissionId, new JudgeOutcome(Verdict.IE, null, null, null, null));
+        store.writeVerdict(submissionId, new JudgeOutcome(Verdict.IE, null, 0, 0, null, null, null, List.of()));
         ack(record);
         publish(job.userId(), submissionId, Verdict.IE);
         releaseInflight(job.userId());

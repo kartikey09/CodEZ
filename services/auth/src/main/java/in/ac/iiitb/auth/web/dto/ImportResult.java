@@ -12,6 +12,9 @@ public record ImportResult(
         List<CreatedUser> created,
         List<Skipped> skipped) {
 
-    public record Skipped(int line, String loginId, String reason) {
+    public record Skipped(
+        int line,
+        String loginId,
+        String reason) {
     }
 }

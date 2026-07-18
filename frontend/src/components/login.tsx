@@ -3,6 +3,7 @@ import { api, ApiError } from '@/lib/api'
 import { useAuth } from '@/auth/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Eye, EyeOff, Loader2, Terminal, AlertCircle } from 'lucide-react'
+import { ThemeToggle } from '@/components/theme-toggle'
 
 export function Login() {
   const { refresh } = useAuth()
@@ -42,7 +43,8 @@ export function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex items-center justify-center px-4 py-10 font-sans">
+    <div className="min-h-screen bg-background text-foreground flex items-center justify-center px-4 py-10 font-sans relative">
+      <ThemeToggle className="absolute top-4 right-4" />
       <div className="w-full max-w-sm">
         <div className="flex items-center gap-2.5 mb-8 justify-center">
           <div className="w-9 h-9 bg-accent rounded-md flex items-center justify-center">
@@ -51,9 +53,9 @@ export function Login() {
           <span className="text-xl font-bold tracking-tight">CodEZ</span>
         </div>
 
-        <div className="bg-card border border-border rounded-xl overflow-hidden">
+        <div className="glass border border-border rounded-xl overflow-hidden">
           <div className="px-7 pt-7 pb-1">
-            <h1 className="text-lg font-bold text-white">Sign in</h1>
+            <h1 className="text-lg font-bold text-foreground">Sign in</h1>
             <p className="text-sm text-muted-foreground mt-1">
               Use the login ID and password issued for the contest.
             </p>

@@ -47,6 +47,15 @@ public class Submission {
     @Column(name = "memory_kb")
     private Integer memoryKb;
 
+    @Column(nullable = false)
+    private String kind;
+
+    @Column(name = "passed_tests")
+    private Integer passedTests;
+
+    @Column(name = "total_tests")
+    private Integer totalTests;
+
     // DB fills created_at via DEFAULT now(); we never write it.
     @Column(name = "created_at", insertable = false, updatable = false)
     private Instant createdAt;
@@ -57,13 +66,15 @@ public class Submission {
     protected Submission() {
     }
 
-    public Submission(Long userId, Long problemId, Long contestId, String language, String sourceCode) {
+    public Submission(Long userId, Long problemId, Long contestId, String language, String sourceCode,
+                       SubmissionKind kind) {
         this.userId = userId;
         this.problemId = problemId;
         this.contestId = contestId;
         this.language = language;
         this.sourceCode = sourceCode;
         this.status = "queued";
+        this.kind = kind.dbValue();
     }
 
     public Long getId() {
@@ -108,6 +119,18 @@ public class Submission {
 
     public Integer getMemoryKb() {
         return memoryKb;
+    }
+
+    public String getKind() {
+        return kind;
+    }
+
+    public Integer getPassedTests() {
+        return passedTests;
+    }
+
+    public Integer getTotalTests() {
+        return totalTests;
     }
 
     public Instant getCreatedAt() {

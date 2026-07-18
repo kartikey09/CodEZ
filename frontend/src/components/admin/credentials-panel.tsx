@@ -49,7 +49,7 @@ export function CredentialsPanel({
   const asCsv = credentials.map((c) => `${c.loginId},${c.password}`).join('\n')
 
   return (
-    <div className={cn('rounded-xl border border-accent/40 bg-accent/5 p-4 mb-6')}>
+    <div className={cn('rounded-xl border border-accent/40 bg-accent/5 backdrop-blur-md p-4 mb-6')}>
       <div className="flex items-start justify-between gap-4 mb-3">
         <div className="flex items-center gap-2">
           <KeyRound size={16} className="text-accent" />

@@ -3,6 +3,7 @@ import { api, ApiError } from '@/lib/api'
 import { useAuth } from '@/auth/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Loader2, KeyRound, AlertCircle } from 'lucide-react'
+import { ThemeToggle } from '@/components/theme-toggle'
 
 /** Shown when the signed-in user still has mustChangePassword = true. */
 export function ChangePassword() {
@@ -38,7 +39,8 @@ export function ChangePassword() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex items-center justify-center px-4 py-10 font-sans">
+    <div className="min-h-screen bg-background text-foreground flex items-center justify-center px-4 py-10 font-sans relative">
+      <ThemeToggle className="absolute top-4 right-4" />
       <div className="w-full max-w-sm">
         <div className="flex items-center gap-2.5 mb-8 justify-center">
           <div className="w-9 h-9 bg-accent rounded-md flex items-center justify-center">
@@ -47,7 +49,7 @@ export function ChangePassword() {
           <span className="text-xl font-bold tracking-tight">Set a new password</span>
         </div>
 
-        <div className="bg-card border border-border rounded-xl p-7">
+        <div className="glass border border-border rounded-xl p-7">
           <p className="text-sm text-muted-foreground mb-5">
             Your account uses a temporary password. Choose a new one to continue.
           </p>

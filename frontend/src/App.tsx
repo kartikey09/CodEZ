@@ -6,13 +6,19 @@ import { RealtimeProvider, useRealtime } from '@/lib/realtime'
 import { Login } from '@/components/login'
 import { ChangePassword } from '@/components/change-password'
 import { ProblemList } from '@/components/problem-list'
+import { Contests } from '@/components/contests'
 import { IDE } from '@/components/ide'
 import { Submissions } from '@/components/submissions'
 import { Leaderboard } from '@/components/leaderboard'
 import { Admin } from '@/components/admin'
 import { AdminUsers } from '@/components/admin/admin-users'
+import { AdminLayout } from '@/components/admin/admin-layout'
+import { AdminContest } from '@/components/admin/admin-contest'
+import { AdminAnnouncements } from '@/components/admin/admin-announcements'
+import { AnnouncementBanner } from '@/components/announcement-banner'
 import { Countdown } from '@/components/countdown'
 import { Toasts } from '@/components/toasts'
+import { ThemeToggle } from '@/components/theme-toggle'
 
 const STATUS_DOT: Record<string, { cls: string; title: string }> = {
   open: { cls: 'bg-accent animate-pulse', title: 'Live — WebSocket connected' },
@@ -71,7 +77,7 @@ export default function App() {
     <ContestProvider>
       <RealtimeProvider>
         <div className="min-h-screen bg-background text-foreground flex flex-col">
-          <header className="border-b border-border bg-card h-16 flex items-center shrink-0">
+          <header className="border-b border-border glass h-16 flex items-center shrink-0 z-30">
             <div className="max-w-full w-full mx-auto px-6 flex items-center justify-between h-full">
               <div className="flex items-center gap-8 h-full">
                 <Link to="/problems" className="flex items-center gap-2">
@@ -82,15 +88,16 @@ export default function App() {
                 </Link>
                 <nav className="flex items-center gap-6 h-full">
                   <NavLink to="/problems" label="Problems" />
+                  <NavLink to="/contests" label="Contests" />
                   <NavLink to="/submissions" label="My Submissions" />
                   <NavLink to="/leaderboard" label="Leaderboard" />
                   {isAdmin && <NavLink to="/admin" label="Admin" />}
-                  {isAdmin && <NavLink to="/admin/users" label="Users" />}
                 </nav>
               </div>
 
               <div className="flex items-center gap-4">
                 <LiveStatus />
+                <ThemeToggle />
                 <div className="flex flex-col items-end leading-tight">
                   <span className="text-sm font-medium text-foreground">{user.displayName}</span>
                   <span className="text-[11px] text-muted-foreground uppercase tracking-wider">{user.role}</span>
@@ -108,6 +115,8 @@ export default function App() {
             </div>
           </header>
 
+          <AnnouncementBanner />
+
           <main className="flex-1 w-full flex overflow-hidden">
             <Routes>
               <Route path="/" element={<Navigate to="/problems" replace />} />
@@ -123,10 +132,17 @@ export default function App() {
                   </div>
                 }
               />
+              <Route path="/contests" element={<Contests />} />
               <Route path="/submissions" element={<Submissions />} />
               <Route path="/leaderboard" element={<Leaderboard />} />
-              {isAdmin && <Route path="/admin" element={<Admin />} />}
-              {isAdmin && <Route path="/admin/users" element={<AdminUsers />} />}
+              {isAdmin && (
+                <Route path="/admin" element={<AdminLayout />}>
+                  <Route index element={<AdminUsers />} />
+                  <Route path="contest" element={<AdminContest />} />
+                  <Route path="announcements" element={<AdminAnnouncements />} />
+                  <Route path="build" element={<Admin />} />
+                </Route>
+              )}
               <Route path="*" element={<Navigate to="/problems" replace />} />
             </Routes>
           </main>

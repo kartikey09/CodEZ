@@ -15,16 +15,25 @@ import java.util.List;
  * Runs one submission's tests through Judge0 and produces a verdict.
  *
  * Two strategies, chosen by app.worker.batch-size:
- *   batch-size <= 1  : SEQUENTIAL (Day-7) \u2014 submit a test, poll it, early-exit on the first non-AC test.
- *                      Cheapest on Judge0 CPU (a failing test stops the rest), most HTTP round-trips.
- *   batch-size  > N  : BATCHED \u2014 submit N tests in one /submissions/batch call, poll the batch, evaluate
- *                      in ordinal order. Early-exit is preserved at *chunk* granularity (a failure in an
- *                      early chunk skips later chunks), trading some Judge0 CPU for far fewer round-trips
- *                      and lower latency. Pick a size that balances your Judge0 capacity against latency.
+ *   batch-size <= 1  : SEQUENTIAL (Day-7) — submit a test, poll it.
+ *   batch-size  > N  : BATCHED — submit N tests in one /submissions/batch call, poll the batch, evaluate
+ *                      in ordinal order.
  *
- * In both paths Judge0 compares stdout to expected_output for us, so 3=AC / 4=WA come straight from the
- * status. A CE is input-independent, so the first CE is the whole submission's verdict (compiler output
- * kept, clipped to compile-output-max-bytes). An all-AC run reports the max CPU time and memory seen.
+ * EXHAUSTIVE JUDGING: every test is run to completion, no early exit — this is required to report an
+ * accurate "X of Y tests passed" count. The one exception is a Compile Error: compiling is source-only
+ * and input-independent, so a CE on the first test means every other test would CE identically; that
+ * still short-circuits immediately, exactly as before (this trades away the old per-test early-exit
+ * optimization for WA/TLE/MLE/RE — a failing submission may now cost up to N Judge0 calls instead of 1).
+ * For any other non-AC verdict, the *first* one encountered determines the submission's overall
+ * `verdict` (same precedence as the old early-exit behavior, since that always stopped at exactly the
+ * first non-AC test) — judging continues through the rest of the tests to build the pass count and
+ * (for Run jobs) the breakdown. A non-AC/CE outcome reports *that first failing test's own* time/memory,
+ * not a running max — an AC outcome reports the max seen across all tests. Both match the pre-existing
+ * display convention.
+ *
+ * `includeBreakdown` is true only for Run jobs (SubmissionProcessor filters their test list down to
+ * samples before calling in here) — the per-test list this produces is the only place hidden-test
+ * identity could ever leak, and it structurally never gets a chance to for Submit jobs.
  *
  * COUPLING (Day 6): submit(Judge0Submission)->String, submitBatch(List)->List<String>, get(String)->Result,
  * getBatch(List)->List<Result>, and Judge0Result.status().id()/.time()/.memory()/.compileOutput().
@@ -42,48 +51,42 @@ public class JudgeService {
         this.props = props;
     }
 
-    public JudgeOutcome judge(JobRow job, ProblemRow problem, List<TestRow> tests) {
+    public JudgeOutcome judge(JobRow job, ProblemRow problem, List<TestRow> tests, boolean includeBreakdown) {
         LanguageRuntime rt = LanguageRuntime.fromSlug(job.language());
         double cpu = rt.cpuLimitSeconds(problem.timeLimitMs());
         double wall = rt.wallLimitSeconds(problem.timeLimitMs());
         int memKb = rt.memoryLimitKb(problem.memoryLimitMb());
 
         return props.batchSize() <= 1
-            ? judgeSequential(job.sourceCode(), rt, cpu, wall, memKb, tests)
-            : judgeBatched(job.sourceCode(), rt, cpu, wall, memKb, tests);
+            ? judgeSequential(job.sourceCode(), rt, cpu, wall, memKb, tests, includeBreakdown)
+            : judgeBatched(job.sourceCode(), rt, cpu, wall, memKb, tests, includeBreakdown);
     }
 
     // ---- sequential (Day 7) ----
 
     private JudgeOutcome judgeSequential(String source, LanguageRuntime rt, double cpu, double wall,
-                                         int memKb, List<TestRow> tests) {
-        int maxTimeMs = 0;
-        int maxMemKb = 0;
+                                         int memKb, List<TestRow> tests, boolean includeBreakdown) {
+        Accumulator acc = new Accumulator();
+        int total = tests.size();
         for (TestRow t : tests) {
             Judge0Submission sub = new Judge0Submission(source, rt.judge0Id(), t.input(), t.expectedOutput(),
                 cpu, wall, memKb);
             Judge0Result res = pollUntilDone(judge0.submit(sub));
 
-            int statusId = statusId(res);
-            Integer tMs = parseTimeMs(res.time());
-            Integer mKb = res.memory();
-            maxTimeMs = max(maxTimeMs, tMs);
-            maxMemKb = max(maxMemKb, mKb);
-
-            JudgeOutcome early = verdictFor(statusId, mKb, memKb, t, res, tMs);
-            if (early != null) {
-                return early;
+            JudgeOutcome ce = evaluateTest(acc, t, res, memKb, total, includeBreakdown);
+            if (ce != null) {
+                return ce;
             }
         }
-        return new JudgeOutcome(Verdict.AC, null, maxTimeMs, maxMemKb, null);
+        return acc.finish(total);
     }
 
     // ---- batched (Day 8) ----
 
     private JudgeOutcome judgeBatched(String source, LanguageRuntime rt, double cpu, double wall,
-                                      int memKb, List<TestRow> tests) {
-        int maxTimeMs = 0;
-        int maxMemKb = 0;
+                                      int memKb, List<TestRow> tests, boolean includeBreakdown) {
+        Accumulator acc = new Accumulator();
+        int total = tests.size();
         int size = Math.max(1, props.batchSize());
 
         for (int start = 0; start < tests.size(); start += size) {
@@ -99,31 +102,65 @@ public class JudgeService {
             for (int i = 0; i < chunk.size(); i++) {
                 TestRow t = chunk.get(i);
                 Judge0Result res = i < results.size() ? results.get(i) : null;
-                int statusId = statusId(res);
-                Integer tMs = res != null ? parseTimeMs(res.time()) : null;
-                Integer mKb = res != null ? res.memory() : null;
-                maxTimeMs = max(maxTimeMs, tMs);
-                maxMemKb = max(maxMemKb, mKb);
 
-                JudgeOutcome early = verdictFor(statusId, mKb, memKb, t, res, tMs);
-                if (early != null) {
-                    return early;   // chunk-level early-exit: skip the remaining chunks
+                JudgeOutcome ce = evaluateTest(acc, t, res, memKb, total, includeBreakdown);
+                if (ce != null) {
+                    return ce;
                 }
             }
         }
-        return new JudgeOutcome(Verdict.AC, null, maxTimeMs, maxMemKb, null);
+        return acc.finish(total);
     }
 
-    /** Map one test's result; return a terminal outcome on CE or any non-AC, or null to keep going. */
-    private JudgeOutcome verdictFor(int statusId, Integer mKb, int memKb, TestRow t, Judge0Result res, Integer tMs) {
+    /**
+     * Evaluate one test's result into the accumulator. Returns a terminal outcome on CE (the one
+     * remaining short-circuit); returns null otherwise so the caller keeps going through every test.
+     */
+    private JudgeOutcome evaluateTest(Accumulator acc, TestRow t, Judge0Result res, int memKb,
+                                      int total, boolean includeBreakdown) {
+        int statusId = statusId(res);
+        Integer tMs = res != null ? parseTimeMs(res.time()) : null;
+        Integer mKb = res != null ? res.memory() : null;
+        acc.maxTimeMs = max(acc.maxTimeMs, tMs);
+        acc.maxMemKb = max(acc.maxMemKb, mKb);
+
         Verdict v = VerdictMapper.map(statusId, mKb, memKb);
         if (v == Verdict.CE) {
-            return new JudgeOutcome(Verdict.CE, null, tMs, mKb, clip(res != null ? res.compileOutput() : null));
+            return new JudgeOutcome(Verdict.CE, null, acc.passed, total, tMs, mKb,
+                clip(res != null ? res.compileOutput() : null), acc.breakdown);
         }
-        if (v != Verdict.AC) {
-            return new JudgeOutcome(v, t.ordinal(), tMs, mKb, null);
+        if (v == Verdict.AC) {
+            acc.passed++;
+        } else if (acc.firstFailureVerdict == null) {
+            acc.firstFailureVerdict = v;
+            acc.firstFailureOrdinal = t.ordinal();
+            acc.firstFailureTimeMs = tMs;
+            acc.firstFailureMemKb = mKb;
+        }
+        if (includeBreakdown) {
+            acc.breakdown.add(new TestOutcome(t.ordinal(), v, tMs, mKb));
         }
         return null;
+    }
+
+    /** Running state across a submission's tests. */
+    private static final class Accumulator {
+        int passed = 0;
+        int maxTimeMs = 0;
+        int maxMemKb = 0;
+        Verdict firstFailureVerdict;
+        Integer firstFailureOrdinal;
+        Integer firstFailureTimeMs;
+        Integer firstFailureMemKb;
+        final List<TestOutcome> breakdown = new ArrayList<>();
+
+        JudgeOutcome finish(int total) {
+            if (firstFailureVerdict != null) {
+                return new JudgeOutcome(firstFailureVerdict, firstFailureOrdinal, passed, total,
+                    firstFailureTimeMs, firstFailureMemKb, null, breakdown);
+            }
+            return new JudgeOutcome(Verdict.AC, null, total, total, maxTimeMs, maxMemKb, null, breakdown);
+        }
     }
 
     // ---- Judge0 polling ----

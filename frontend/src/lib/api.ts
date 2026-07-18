@@ -17,10 +17,14 @@ import type {
   TestCaseUploadResult,
   RebuildResult,
   ContestInfo,
+  ContestPageResponse,
   AdminUser,
   CreatedUser,
   ImportResult,
   ResetResult,
+  AdminContest,
+  UpdateContest,
+  Announcement,
 } from './types'
 
 // Both services are reached via same-origin relative paths (the dev server /
@@ -31,11 +35,14 @@ import type {
 export class ApiError extends Error {
   readonly status: number
   readonly code: string
-  constructor(status: number, code: string, message: string) {
+  /** Only set for 429s that carry a retry hint (e.g. the Run rate limiter). */
+  readonly retryAfterSeconds?: number
+  constructor(status: number, code: string, message: string, retryAfterSeconds?: number) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.code = code
+    this.retryAfterSeconds = retryAfterSeconds
   }
 }
 
@@ -66,11 +73,12 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
 
   if (!res.ok) {
-    const body = (data ?? {}) as { code?: string; message?: string }
+    const body = (data ?? {}) as { code?: string; message?: string; retryAfterSeconds?: number }
     throw new ApiError(
       res.status,
       body.code ?? `HTTP_${res.status}`,
       body.message ?? res.statusText ?? 'Request failed',
+      body.retryAfterSeconds,
     )
   }
 
@@ -103,6 +111,14 @@ export const api = {
       body: JSON.stringify({ problemId, language, sourceCode }),
     }),
 
+  // Practice run against sample tests only — separate rate limit from Submit's cooldown,
+  // never shows up in "my submissions".
+  runProblem: (problemId: number, language: Language, sourceCode: string) =>
+    request<SubmissionAccepted>(`/api/problems/${problemId}/run`, {
+      method: 'POST',
+      body: JSON.stringify({ language, sourceCode }),
+    }),
+
   getSubmission: (id: number) => request<SubmissionStatusResponse>(`/api/submissions/${id}`),
 
   getMySubmissions: () => request<SubmissionSummary[]>('/api/submissions/mine'),
@@ -112,11 +128,18 @@ export const api = {
   // The running contest, for the countdown + WebSocket channel id. 404 (ApiError) when nothing is running.
   getContest: () => request<ContestInfo>('/api/contest'),
 
+  // Every contest ever run, newest first — paginated for the Contests tab.
+  getContests: (page = 0, size = 10) =>
+    request<ContestPageResponse>(`/api/contests?page=${page}&size=${size}`),
+
   getStandings: (contestId: number, limit = 200) =>
     request<StandingsResponse>(`/api/contests/${contestId}/standings?limit=${limit}`),
 
   getMyStanding: (contestId: number) =>
     request<MyStanding>(`/api/contests/${contestId}/standings/me`),
+
+  // ----- announcements banner feed (student, Day 13) -----
+  getAnnouncements: () => request<Announcement[]>('/api/announcements'),
 
   // ----- admin (/api/admin, role gate in SessionAuthFilter) -----
   adminCreateContest: (req: CreateContestRequest) =>
@@ -163,5 +186,27 @@ export const api = {
         method: 'PATCH',
         body: JSON.stringify({ role }),
       }),
+
+    // ----- contest-api admin: contest control (Day 13) -----
+    listContests: () => request<AdminContest[]>('/api/admin/contests'),
+
+    updateContest: (id: number, patch: UpdateContest) =>
+      request<AdminContest>(`/api/admin/contests/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(patch),
+      }),
+
+    // ----- contest-api admin: announcements (Day 13) -----
+    listAnnouncements: (contestId: number) =>
+      request<Announcement[]>(`/api/admin/announcements?contestId=${contestId}`),
+
+    createAnnouncement: (contestId: number, message: string) =>
+      request<Announcement>('/api/admin/announcements', {
+        method: 'POST',
+        body: JSON.stringify({ contestId, message }),
+      }),
+
+    deactivateAnnouncement: (id: number) =>
+      request<Announcement>(`/api/admin/announcements/${id}/deactivate`, { method: 'POST' }),
   },
 }

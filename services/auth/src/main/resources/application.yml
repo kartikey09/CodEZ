@@ -19,6 +19,7 @@ spring:
     redis:
       host: localhost
       port: 6379
+      password: e0245a7dc1216ca16ad4d5a7abf5ecb1313cd35b   # DEV ONLY — must match contest-redis's --requirepass
 
 app:
   cookie-secure: false               # DEV over http. MUST be true in prod (https) — see application-prod.yml
