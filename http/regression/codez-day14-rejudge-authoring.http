@@ -1,0 +1,219 @@
+### 08 — PROBLEM AUTHORING + REJUDGE  (Day 14). Drop into http/regression/ alongside 00–07.
+#
+# Needs: 00-bootstrap already run (supplies {{adminPassword}}), contest-api + auth-service up.
+# The rejudge section needs a judged submission to exist; if none does it asserts the honest
+# "nothing to rejudge" result (requeued 0) instead, so the file passes either way.
+#
+# Authoring works against a throwaway DRAFT contest, so the live seed contest is untouched.
+
+### A1 — admin login
+POST {{authHost}}/auth/login
+Content-Type: application/json
+
+{ "loginId": "{{adminLogin}}", "password": "{{adminPassword}}" }
+> {% client.test("admin login 200", () => client.assert(response.status === 200)); %}
+
+### A2 — a scratch contest to author into
+POST {{apiHost}}/api/admin/contests
+Content-Type: application/json
+
+{ "title": "Authoring Scratch", "startsAt": "2027-03-01T10:00:00Z", "endsAt": "2027-03-01T13:00:00Z", "state": "draft" }
+> {%
+    client.test("contest 201", () => client.assert(response.status === 201));
+    client.global.set("scratchContestId", response.body.id);
+%}
+
+### A3 — create a problem → 201
+POST {{apiHost}}/api/admin/problems
+Content-Type: application/json
+
+{ "contestId": {{scratchContestId}}, "label": "A", "title": "Sum of Two",
+  "statementMd": "Read two integers and print their sum.", "timeLimitMs": 1000, "memoryLimitMb": 256 }
+> {%
+    client.test("problem 201", () => client.assert(response.status === 201));
+    client.global.set("problemId", response.body.id);
+%}
+
+### A4 — list problems for the contest → 200
+GET {{apiHost}}/api/admin/problems?contestId={{scratchContestId}}
+> {%
+    client.test("list 200", () => client.assert(response.status === 200));
+    client.test("our problem is listed", () =>
+        client.assert(response.body.some(p => p.id === client.global.get("problemId"))));
+%}
+
+### A5 — detail: no tests yet, version starts at 1
+GET {{apiHost}}/api/admin/problems/{{problemId}}
+> {%
+    client.test("detail 200", () => client.assert(response.status === 200));
+    client.test("no tests yet", () => client.assert(response.body.testCount === 0));
+    client.test("version 1", () => client.assert(response.body.testDataVersion === 1));
+    client.global.set("versionBefore", response.body.testDataVersion);
+%}
+
+### A6 — partial edit: title + time limit only (label untouched)
+PATCH {{apiHost}}/api/admin/problems/{{problemId}}
+Content-Type: application/json
+
+{ "title": "Sum of Two Integers", "timeLimitMs": 2000 }
+> {%
+    client.test("patch 200", () => client.assert(response.status === 200));
+    client.test("title updated", () => client.assert(response.body.title === "Sum of Two Integers"));
+    client.test("limit updated", () => client.assert(response.body.timeLimitMs === 2000));
+    client.test("label untouched", () => client.assert(response.body.label === "A"));
+%}
+
+### A7 — non-positive limit → 400 INVALID_PROBLEM_UPDATE
+PATCH {{apiHost}}/api/admin/problems/{{problemId}}
+Content-Type: application/json
+
+{ "memoryLimitMb": 0 }
+> {%
+    client.test("bad limit 400", () => client.assert(response.status === 400));
+    client.test("code INVALID_PROBLEM_UPDATE", () => client.assert(response.body.code === "INVALID_PROBLEM_UPDATE"));
+%}
+
+### A8 — blank title → 400
+PATCH {{apiHost}}/api/admin/problems/{{problemId}}
+Content-Type: application/json
+
+{ "title": "   " }
+> {% client.test("blank title 400", () => client.assert(response.status === 400)); %}
+
+### A9 — unknown problem → 404
+PATCH {{apiHost}}/api/admin/problems/99999999
+Content-Type: application/json
+
+{ "title": "ghost" }
+> {% client.test("unknown problem 404", () => client.assert(response.status === 404)); %}
+
+### B1 — upload one sample + one hidden test → 200
+POST {{apiHost}}/api/admin/problems/{{problemId}}/test-cases
+Content-Type: application/json
+
+{ "tests": [
+  { "ordinal": 1, "input": "2 3\n", "expectedOutput": "5\n", "sample": true },
+  { "ordinal": 2, "input": "10 20\n", "expectedOutput": "30\n", "sample": false }
+] }
+> {%
+    client.test("upload 200", () => client.assert(response.status === 200));
+    client.test("added two", () => client.assert(response.body.added === 2));
+%}
+
+### B2 — SECURITY: hidden test data is not returned; samples are
+GET {{apiHost}}/api/admin/problems/{{problemId}}/test-cases
+> {%
+    client.test("tests 200", () => client.assert(response.status === 200));
+    const sample = response.body.find(t => t.sample === true);
+    const hidden = response.body.find(t => t.sample === false);
+    client.test("sample carries its data", () => client.assert(sample.input === "2 3\n"));
+    client.test("hidden input withheld", () => client.assert(hidden.input === null || hidden.input === undefined));
+    client.test("hidden output withheld", () =>
+        client.assert(hidden.expectedOutput === null || hidden.expectedOutput === undefined));
+    client.test("hidden sizes still reported", () => client.assert(hidden.inputBytes > 0));
+%}
+
+### B3 — the upload bumped test_data_version (workers must drop cached tests)
+GET {{apiHost}}/api/admin/problems/{{problemId}}
+> {%
+    client.test("detail 200", () => client.assert(response.status === 200));
+    client.test("two tests", () => client.assert(response.body.testCount === 2));
+    client.test("version bumped", () =>
+        client.assert(response.body.testDataVersion > client.global.get("versionBefore")));
+    client.global.set("versionAfterUpload", response.body.testDataVersion);
+%}
+
+### B4 — re-using an existing ordinal → 400
+POST {{apiHost}}/api/admin/problems/{{problemId}}/test-cases
+Content-Type: application/json
+
+{ "tests": [ { "ordinal": 2, "input": "x", "expectedOutput": "y", "sample": false } ] }
+> {%
+    client.test("duplicate ordinal 400", () => client.assert(response.status === 400));
+    client.test("code INVALID_PROBLEM_UPDATE", () => client.assert(response.body.code === "INVALID_PROBLEM_UPDATE"));
+%}
+
+### B5 — duplicate ordinal WITHIN one upload → 400
+POST {{apiHost}}/api/admin/problems/{{problemId}}/test-cases
+Content-Type: application/json
+
+{ "tests": [
+  { "ordinal": 7, "input": "a", "expectedOutput": "b", "sample": false },
+  { "ordinal": 7, "input": "c", "expectedOutput": "d", "sample": false }
+] }
+> {% client.test("dup in payload 400", () => client.assert(response.status === 400)); %}
+
+### B6 — delete the hidden test → 204, and version bumps again
+DELETE {{apiHost}}/api/admin/problems/{{problemId}}/test-cases/2
+> {% client.test("delete 204", () => client.assert(response.status === 204)); %}
+
+###
+GET {{apiHost}}/api/admin/problems/{{problemId}}
+> {%
+    client.test("one test left", () => client.assert(response.body.testCount === 1));
+    client.test("version bumped again", () =>
+        client.assert(response.body.testDataVersion > client.global.get("versionAfterUpload")));
+%}
+
+### B7 — deleting an ordinal that isn't there → 404
+DELETE {{apiHost}}/api/admin/problems/{{problemId}}/test-cases/99
+> {% client.test("unknown ordinal 404", () => client.assert(response.status === 404)); %}
+
+# ---- REJUDGE ----
+# Targets are status='done', kind='submit' rows only. On a fresh seed with no worker running there
+# may be nothing judged yet — C2/C3 accept that and assert requeued 0.
+
+### C1 — the scratch problem has no submissions at all → requeued 0 (not an error)
+POST {{apiHost}}/api/admin/problems/{{problemId}}/rejudge
+> {%
+    client.test("rejudge 200", () => client.assert(response.status === 200));
+    client.test("nothing to requeue", () => client.assert(response.body.requeued === 0));
+    client.test("scope reported", () => client.assert(response.body.scope === "problem"));
+%}
+
+### C2 — find the live contest and rejudge it (0 if nothing has been judged yet)
+GET {{apiHost}}/api/admin/contests
+> {%
+    const running = response.body.find(c => c.state === "running") || response.body[0];
+    client.global.set("liveContestId", running.id);
+%}
+
+###
+POST {{apiHost}}/api/admin/contests/{{liveContestId}}/rejudge
+> {%
+    client.test("contest rejudge 200", () => client.assert(response.status === 200));
+    client.test("scope is contest", () => client.assert(response.body.scope === "contest"));
+    client.test("count is a number", () => client.assert(typeof response.body.requeued === "number"));
+%}
+
+### C3 — rejudging a submission that was never judged → 400 INVALID_REJUDGE
+# Uses the newest of the student's submissions if there is one; otherwise this asserts the 404 path.
+POST {{apiHost}}/api/admin/submissions/99999999/rejudge
+> {%
+    client.test("unknown submission 404", () => client.assert(response.status === 404));
+%}
+
+### C4 — unknown problem / contest → 404
+POST {{apiHost}}/api/admin/problems/99999999/rejudge
+> {% client.test("unknown problem 404", () => client.assert(response.status === 404)); %}
+
+###
+POST {{apiHost}}/api/admin/contests/99999999/rejudge
+> {% client.test("unknown contest 404", () => client.assert(response.status === 404)); %}
+
+# ---- gate check: a student may not author or rejudge (keep last, swaps the session) ----
+
+### G1 — student login
+POST {{authHost}}/auth/login
+Content-Type: application/json
+
+{ "loginId": "{{studentLogin}}", "password": "{{studentPassword}}" }
+> {% client.test("student login 200", () => client.assert(response.status === 200)); %}
+
+### G2 — authoring is admin-only → 403
+GET {{apiHost}}/api/admin/problems?contestId={{scratchContestId}}
+> {% client.test("student blocked from authoring 403", () => client.assert(response.status === 403)); %}
+
+### G3 — rejudge is admin-only → 403
+POST {{apiHost}}/api/admin/problems/{{problemId}}/rejudge
+> {% client.test("student blocked from rejudge 403", () => client.assert(response.status === 403)); %}

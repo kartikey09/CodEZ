@@ -15,6 +15,7 @@ import { AdminUsers } from '@/components/admin/admin-users'
 import { AdminLayout } from '@/components/admin/admin-layout'
 import { AdminContest } from '@/components/admin/admin-contest'
 import { AdminAnnouncements } from '@/components/admin/admin-announcements'
+import { AdminProblems } from '@/components/admin/admin-problems'
 import { AnnouncementBanner } from '@/components/announcement-banner'
 import { Countdown } from '@/components/countdown'
 import { Toasts } from '@/components/toasts'
@@ -140,6 +141,7 @@ export default function App() {
                   <Route index element={<AdminUsers />} />
                   <Route path="contest" element={<AdminContest />} />
                   <Route path="announcements" element={<AdminAnnouncements />} />
+                  <Route path="problems" element={<AdminProblems />} />
                   <Route path="build" element={<Admin />} />
                 </Route>
               )}

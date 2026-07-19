@@ -291,3 +291,52 @@ export interface Announcement {
   active: boolean
   createdAt: string
 }
+
+// ----- problem authoring + rejudge (contest-api, Day 14) -----
+
+/**
+ * One test case as the authoring UI sees it. Hidden-test data never leaves the server:
+ * `input`/`expectedOutput` are populated for samples only, so a hidden row shows sizes
+ * (`inputBytes`/`expectedOutputBytes`) and nothing else. Editing a hidden test = delete + re-add.
+ */
+export interface AdminTestCase {
+  id: number
+  ordinal: number
+  sample: boolean
+  inputBytes: number
+  expectedOutputBytes: number
+  input: string | null
+  expectedOutput: string | null
+}
+
+/** GET /api/admin/problems/{id} — everything the authoring page needs (ProblemAdminDetail). */
+export interface AdminProblemDetail {
+  id: number
+  contestId: number
+  label: string
+  title: string
+  statementMd: string
+  timeLimitMs: number
+  memoryLimitMb: number
+  testDataVersion: number
+  testCount: number
+  /** Graded attempts not yet finished — non-zero while a rejudge is in flight. */
+  pendingSubmissions: number
+  tests: AdminTestCase[]
+}
+
+/** Partial problem edit (UpdateProblemRequest) — send only what changed. */
+export interface UpdateProblem {
+  label?: string
+  title?: string
+  statementMd?: string
+  timeLimitMs?: number
+  memoryLimitMb?: number
+}
+
+/** POST .../rejudge response (RejudgeResult). Judging is async; the board catches up on its own. */
+export interface RejudgeResult {
+  scope: 'submission' | 'problem' | 'contest' | string
+  targetId: number
+  requeued: number
+}

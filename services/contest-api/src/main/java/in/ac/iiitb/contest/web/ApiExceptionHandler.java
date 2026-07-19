@@ -3,6 +3,8 @@ package in.ac.iiitb.contest.web;
 import in.ac.iiitb.contest.error.*;
 import in.ac.iiitb.contest.web.dto.ErrorResponse;
 import org.springframework.dao.DataIntegrityViolationException;
+import in.ac.iiitb.contest.error.InvalidProblemUpdateException;
+import in.ac.iiitb.contest.error.InvalidRejudgeException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -103,5 +105,19 @@ public class ApiExceptionHandler {
     public ResponseEntity<ErrorResponse> invalidContestUpdate(InvalidContestUpdateException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
             .body(new ErrorResponse("INVALID_CONTEST_UPDATE", ex.getMessage()));
+    }
+
+    // ----- Day 14: rejudge + problem authoring validation -----
+
+    @ExceptionHandler(InvalidRejudgeException.class)
+    public ResponseEntity<ErrorResponse> invalidRejudge(InvalidRejudgeException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+            .body(new ErrorResponse("INVALID_REJUDGE", ex.getMessage()));
+    }
+
+    @ExceptionHandler(InvalidProblemUpdateException.class)
+    public ResponseEntity<ErrorResponse> invalidProblemUpdate(InvalidProblemUpdateException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+            .body(new ErrorResponse("INVALID_PROBLEM_UPDATE", ex.getMessage()));
     }
 }

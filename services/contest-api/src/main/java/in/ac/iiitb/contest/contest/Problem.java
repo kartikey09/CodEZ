@@ -58,4 +58,19 @@ public class Problem {
     public int getTimeLimitMs() { return timeLimitMs; }
     public int getMemoryLimitMb() { return memoryLimitMb; }
     public int getTestDataVersion() { return testDataVersion; }
+
+    // ----- Day 14: the problem-authoring UI edits problems in place -----
+
+    public void setLabel(String label) { this.label = label; }
+    public void setTitle(String title) { this.title = title; }
+    public void setStatementMd(String statementMd) { this.statementMd = statementMd; }
+    public void setTimeLimitMs(int timeLimitMs) { this.timeLimitMs = timeLimitMs; }
+    public void setMemoryLimitMb(int memoryLimitMb) { this.memoryLimitMb = memoryLimitMb; }
+
+    /**
+     * Must be called on EVERY change to this problem's test data. The orchestrator's TestCache is
+     * keyed by problemId + testDataVersion, so without a bump a worker keeps serving the tests it
+     * cached before the edit — and a rejudge would silently re-run against stale data.
+     */
+    public void bumpTestDataVersion() { this.testDataVersion++; }
 }

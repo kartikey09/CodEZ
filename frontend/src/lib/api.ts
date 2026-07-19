@@ -25,6 +25,10 @@ import type {
   AdminContest,
   UpdateContest,
   Announcement,
+  AdminProblemDetail,
+  AdminTestCase,
+  UpdateProblem,
+  RejudgeResult,
 } from './types'
 
 // Both services are reached via same-origin relative paths (the dev server /
@@ -208,5 +212,33 @@ export const api = {
 
     deactivateAnnouncement: (id: number) =>
       request<Announcement>(`/api/admin/announcements/${id}/deactivate`, { method: 'POST' }),
+
+    // ----- contest-api admin: problem authoring (Day 14) -----
+    listProblems: (contestId: number) =>
+      request<ProblemAdminResponse[]>(`/api/admin/problems?contestId=${contestId}`),
+
+    getProblem: (id: number) => request<AdminProblemDetail>(`/api/admin/problems/${id}`),
+
+    updateProblem: (id: number, patch: UpdateProblem) =>
+      request<ProblemAdminResponse>(`/api/admin/problems/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(patch),
+      }),
+
+    listTestCases: (problemId: number) =>
+      request<AdminTestCase[]>(`/api/admin/problems/${problemId}/test-cases`),
+
+    deleteTestCase: (problemId: number, ordinal: number) =>
+      request<void>(`/api/admin/problems/${problemId}/test-cases/${ordinal}`, { method: 'DELETE' }),
+
+    // ----- contest-api admin: rejudge (Day 14) -----
+    rejudgeSubmission: (id: number) =>
+      request<RejudgeResult>(`/api/admin/submissions/${id}/rejudge`, { method: 'POST' }),
+
+    rejudgeProblem: (id: number) =>
+      request<RejudgeResult>(`/api/admin/problems/${id}/rejudge`, { method: 'POST' }),
+
+    rejudgeContest: (id: number) =>
+      request<RejudgeResult>(`/api/admin/contests/${id}/rejudge`, { method: 'POST' }),
   },
 }

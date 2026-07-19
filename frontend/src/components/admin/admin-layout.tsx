@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { Users, CalendarCog, Megaphone, Hammer } from 'lucide-react'
+import { Users, CalendarCog, Megaphone, Hammer, FileCode } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 /**
@@ -17,6 +17,7 @@ const tabs = [
   { to: '/admin', end: true, label: 'Users', icon: Users },
   { to: '/admin/contest', end: false, label: 'Contest', icon: CalendarCog },
   { to: '/admin/announcements', end: false, label: 'Announcements', icon: Megaphone },
+  { to: '/admin/problems', end: false, label: 'Problems', icon: FileCode },
   { to: '/admin/build', end: false, label: 'Build', icon: Hammer },
 ]
 
