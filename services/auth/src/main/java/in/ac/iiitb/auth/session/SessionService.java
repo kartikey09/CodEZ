@@ -9,13 +9,18 @@ import java.time.Duration;
 import java.util.Base64;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Server-side sessions: an opaque 256-bit token lives in the `sid` cookie;
  * the session record lives in Redis at `sess:{sid}` with a sliding TTL.
  * Postgres remains the source of truth for users; Redis just holds live sessions.
+ *
+ * Day 15 adds a reverse index, `sessions:user:{userId}` -> set of sids, purely so that live
+ * sessions can be REVOKED. Until now a session cached role and active-state at login and was never
+ * re-read, so deactivating or demoting somebody left their existing session working with the old
+ * privileges until it expired (up to the 8h TTL). That is the gap {@link #destroyAllForUser} closes.
  */
-
 @Service
 public class SessionService {
 
@@ -32,6 +37,10 @@ public class SessionService {
         return "sess:" + sid;
     }
 
+    private static String userKey(long userId) {
+        return "sessions:user:" + userId;
+    }
+
     public String create(CurrentUser u) {
         byte[] buf = new byte[32];
         rng.nextBytes(buf);
@@ -43,6 +52,10 @@ public class SessionService {
             "role", u.role(),
             "mustChange", Boolean.toString(u.mustChangePassword())));
         redis.expire(key(sid), ttl);
+
+        // reverse index for revocation; TTL is refreshed on every new session for this user
+        redis.opsForSet().add(userKey(u.userId()), sid);
+        redis.expire(userKey(u.userId()), ttl.plusHours(1));
         return sid;
     }
 
@@ -71,8 +84,33 @@ public class SessionService {
     }
 
     public void destroy(String sid) {
-        if (sid != null) {
-            redis.delete(key(sid));
+        if (sid == null) {
+            return;
         }
+        Object userId = redis.opsForHash().get(key(sid), "userId");
+        redis.delete(key(sid));
+        if (userId != null) {
+            redis.opsForSet().remove(userKey(Long.parseLong((String) userId)), sid);
+        }
+    }
+
+    /**
+     * Kill every live session for a user — used when an account is deactivated or its role changes,
+     * so the change takes effect immediately instead of at next login. Returns how many were killed.
+     */
+    public long destroyAllForUser(long userId) {
+        Set<String> sids = redis.opsForSet().members(userKey(userId));
+        if (sids == null || sids.isEmpty()) {
+            redis.delete(userKey(userId));
+            return 0;
+        }
+        long killed = 0;
+        for (String sid : sids) {
+            if (Boolean.TRUE.equals(redis.delete(key(sid)))) {
+                killed++;
+            }
+        }
+        redis.delete(userKey(userId));
+        return killed;
     }
 }

@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.util.List;
 
+import in.ac.iiitb.auth.event.AuthEventService;
 import in.ac.iiitb.auth.session.SessionService;
 import in.ac.iiitb.auth.user.UserAdminService;
 import in.ac.iiitb.auth.web.admin.AdminUserController;
@@ -46,6 +47,10 @@ class AdminUserControllerTest {
     // The filter isn't run here, but @WebMvcTest may still wire it; give it a mock dep.
     @MockBean
     private SessionService sessions;
+
+    // Day 15: AdminUserController now writes an audit event for every action.
+    @MockBean
+    private AuthEventService events;
 
     @Test
     void listReturnsUsers() throws Exception {

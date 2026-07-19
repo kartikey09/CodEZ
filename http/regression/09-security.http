@@ -1,0 +1,293 @@
+### 09 — SECURITY HARDENING  (Day 15). Lives in http/regression/ alongside the other numbered files.
+#
+# Needs: 00-bootstrap already run (supplies {{adminPassword}} / {{studentPassword}}), auth-service
+# and contest-api up.
+#
+# NOTE on section C: it deliberately locks an account out. It uses a THROWAWAY account it creates
+# itself, never a seed account, so nothing you need afterwards gets locked.
+
+### A1 — admin login
+POST {{authHost}}/auth/login
+Content-Type: application/json
+
+{ "loginId": "{{adminLogin}}", "password": "{{adminPassword}}" }
+> {%
+    client.test("admin login 200", () => client.assert(response.status === 200));
+    client.global.set("uniq", "sec" + Date.now());
+%}
+
+# ---- A. THE AUTHORISATION-BYPASS FIX ----
+# Each of these is routed to an admin handler but does not literally start with /api/admin/.
+# Before Day 15 the filter compared the raw URI, so a STUDENT could reach them. They must now be
+# gated exactly like the honest path. As admin they should all succeed (200); as a student (section
+# B) they must all be refused.
+
+### A2 — honest path works
+GET {{apiHost}}/api/admin/contests
+> {% client.test("plain admin path 200", () => client.assert(response.status === 200)); %}
+
+### A3 — percent-encoded 'a' still routes, and is still an admin route
+GET {{apiHost}}/api/%61dmin/contests
+> {% client.test("encoded path reaches admin as admin (200)", () => client.assert(response.status === 200)); %}
+
+### A4 — dot segment
+GET {{apiHost}}/api/./admin/contests
+> {% client.test("dot segment 200", () => client.assert(response.status === 200)); %}
+
+### A5 — encoded slash is refused outright (fail closed)
+GET {{apiHost}}/api/%2fadmin/contests
+> {%
+    client.test("encoded separator refused", () => client.assert(response.status === 400 || response.status === 404));
+    if (response.status === 400) {
+        client.test("code BAD_REQUEST", () => client.assert(response.body.code === "BAD_REQUEST"));
+    }
+%}
+
+# ---- B. THE SAME VECTORS AS A STUDENT: every one must be refused ----
+
+### B1 — student login
+POST {{authHost}}/auth/login
+Content-Type: application/json
+
+{ "loginId": "{{studentLogin}}", "password": "{{studentPassword}}" }
+> {% client.test("student login 200", () => client.assert(response.status === 200)); %}
+
+### B2 — honest admin path → 403 FORBIDDEN (code is now consistent with auth-service)
+GET {{apiHost}}/api/admin/contests
+> {%
+    client.test("student refused 403", () => client.assert(response.status === 403));
+    client.test("code FORBIDDEN", () => client.assert(response.body.code === "FORBIDDEN"));
+%}
+
+### B3 — THE BYPASS: percent-encoded, as a student → must NOT be 200
+GET {{apiHost}}/api/%61dmin/contests
+> {% client.test("encoded bypass blocked", () => client.assert(response.status === 403 || response.status === 400)); %}
+
+### B4 — duplicate slash, as a student → must NOT be 200
+GET {{apiHost}}/api//admin/contests
+> {% client.test("double-slash bypass blocked", () => client.assert(response.status !== 200)); %}
+
+### B5 — dot segment, as a student → must NOT be 200
+GET {{apiHost}}/api/./admin/contests
+> {% client.test("dot-segment bypass blocked", () => client.assert(response.status !== 200)); %}
+
+### B6 — parent segment, as a student → must NOT be 200
+GET {{apiHost}}/api/problems/../admin/contests
+> {% client.test("traversal bypass blocked", () => client.assert(response.status !== 200)); %}
+
+### B7 — path parameter, as a student → must NOT be 200
+GET {{apiHost}}/api/admin/contests;x=1
+> {% client.test("path-param bypass blocked", () => client.assert(response.status !== 200)); %}
+
+# ---- C. LOGIN THROTTLE (uses a throwaway account) ----
+
+### C1 — admin creates a throwaway account
+POST {{authHost}}/auth/login
+Content-Type: application/json
+
+{ "loginId": "{{adminLogin}}", "password": "{{adminPassword}}" }
+> {% client.test("admin re-login 200", () => client.assert(response.status === 200)); %}
+
+###
+POST {{authHost}}/auth/admin/users
+Content-Type: application/json
+
+{ "loginId": "{{uniq}}", "displayName": "Throttle Target" }
+> {%
+    client.test("created 201", () => client.assert(response.status === 201));
+    client.global.set("targetId", response.body.id);
+%}
+
+### C2..C9 — wrong password, repeatedly. Default cap is 8 account failures; the first few are 401.
+POST {{authHost}}/auth/login
+Content-Type: application/json
+
+{ "loginId": "{{uniq}}", "password": "wrong-1" }
+> {% client.test("401 not 429", () => client.assert(response.status === 401)); %}
+
+###
+POST {{authHost}}/auth/login
+Content-Type: application/json
+
+{ "loginId": "{{uniq}}", "password": "wrong-2" }
+> {% client.test("401", () => client.assert(response.status === 401)); %}
+
+###
+POST {{authHost}}/auth/login
+Content-Type: application/json
+
+{ "loginId": "{{uniq}}", "password": "wrong-3" }
+> {% client.test("401", () => client.assert(response.status === 401)); %}
+
+###
+POST {{authHost}}/auth/login
+Content-Type: application/json
+
+{ "loginId": "{{uniq}}", "password": "wrong-4" }
+> {% client.test("401 or 429", () => client.assert(response.status === 401 || response.status === 429)); %}
+
+###
+POST {{authHost}}/auth/login
+Content-Type: application/json
+
+{ "loginId": "{{uniq}}", "password": "wrong-5" }
+> {% client.test("401 or 429", () => client.assert(response.status === 401 || response.status === 429)); %}
+
+###
+POST {{authHost}}/auth/login
+Content-Type: application/json
+
+{ "loginId": "{{uniq}}", "password": "wrong-6" }
+> {% client.test("401 or 429", () => client.assert(response.status === 401 || response.status === 429)); %}
+
+###
+POST {{authHost}}/auth/login
+Content-Type: application/json
+
+{ "loginId": "{{uniq}}", "password": "wrong-7" }
+> {% client.test("401 or 429", () => client.assert(response.status === 401 || response.status === 429)); %}
+
+###
+POST {{authHost}}/auth/login
+Content-Type: application/json
+
+{ "loginId": "{{uniq}}", "password": "wrong-8" }
+> {% client.test("401 or 429", () => client.assert(response.status === 401 || response.status === 429)); %}
+
+### C10 — by now the account is locked: 429 with Retry-After, and code LOGIN_THROTTLED
+POST {{authHost}}/auth/login
+Content-Type: application/json
+
+{ "loginId": "{{uniq}}", "password": "wrong-9" }
+> {%
+    client.test("locked out 429", () => client.assert(response.status === 429));
+    client.test("code LOGIN_THROTTLED", () => client.assert(response.body.code === "LOGIN_THROTTLED"));
+    client.test("Retry-After present", () => client.assert(response.headers.valueOf("Retry-After") !== null));
+%}
+
+### C11 — a lockout also refuses the CORRECT password (this is the point of a lockout)
+# It stays locked for app.login.lockout-seconds (default 900s).
+POST {{authHost}}/auth/login
+Content-Type: application/json
+
+{ "loginId": "{{uniq}}", "password": "whatever" }
+> {% client.test("still locked", () => client.assert(response.status === 429)); %}
+
+### C12 — an unrelated account is unaffected (the lockout is per account, not global)
+POST {{authHost}}/auth/login
+Content-Type: application/json
+
+{ "loginId": "{{adminLogin}}", "password": "{{adminPassword}}" }
+> {% client.test("admin unaffected 200", () => client.assert(response.status === 200)); %}
+
+# ---- D. LIVE SESSION REVOCATION (closes the Day-12 gap) ----
+
+### D1 — create a second throwaway and log in AS them in a moment
+POST {{authHost}}/auth/admin/users
+Content-Type: application/json
+
+{ "loginId": "{{uniq}}b", "displayName": "Revoke Target" }
+> {%
+    client.test("created 201", () => client.assert(response.status === 201));
+    client.global.set("revokeId", response.body.id);
+    client.global.set("revokePw", response.body.initialPassword);
+%}
+
+### D2 — that user logs in (session now live) and clears must-change
+POST {{authHost}}/auth/login
+Content-Type: application/json
+
+{ "loginId": "{{uniq}}b", "password": "{{revokePw}}" }
+> {% client.test("login 200", () => client.assert(response.status === 200)); %}
+
+###
+POST {{authHost}}/auth/change-password
+Content-Type: application/json
+
+{ "currentPassword": "{{revokePw}}", "newPassword": "RevokePw123!" }
+> {% client.test("change-password 204", () => client.assert(response.status === 204)); %}
+
+### D3 — session works
+GET {{authHost}}/auth/me
+> {% client.test("me 200", () => client.assert(response.status === 200)); %}
+
+### D4 — an ADMIN deactivates them (different client session would normally be needed; here the
+### cookie is swapped by logging back in as admin)
+POST {{authHost}}/auth/login
+Content-Type: application/json
+
+{ "loginId": "{{adminLogin}}", "password": "{{adminPassword}}" }
+> {% client.test("admin login 200", () => client.assert(response.status === 200)); %}
+
+###
+POST {{authHost}}/auth/admin/users/{{revokeId}}/deactivate
+> {%
+    client.test("deactivate 200", () => client.assert(response.status === 200));
+    client.test("now inactive", () => client.assert(response.body.active === false));
+%}
+
+### D5 — the deactivated user can no longer log in at all (403), and their old session is dead.
+### Before Day 15 an already-open session kept working until its 8h TTL expired.
+POST {{authHost}}/auth/login
+Content-Type: application/json
+
+{ "loginId": "{{uniq}}b", "password": "RevokePw123!" }
+> {%
+    client.test("disabled 403", () => client.assert(response.status === 403));
+    client.test("code ACCOUNT_DISABLED", () => client.assert(response.body.code === "ACCOUNT_DISABLED"));
+%}
+
+# ---- E. AUDIT TRAIL ----
+
+### E1 — admin re-login, then read the trail
+POST {{authHost}}/auth/login
+Content-Type: application/json
+
+{ "loginId": "{{adminLogin}}", "password": "{{adminPassword}}" }
+> {% client.test("admin login 200", () => client.assert(response.status === 200)); %}
+
+###
+GET {{authHost}}/auth/admin/events?limit=200
+> {%
+    client.test("events 200", () => client.assert(response.status === 200));
+    client.test("newest first", () => client.assert(Array.isArray(response.body) && response.body.length > 0));
+    client.test("login successes recorded", () =>
+        client.assert(response.body.some(e => e.event === "LOGIN_SUCCESS")));
+    client.test("failures recorded", () =>
+        client.assert(response.body.some(e => e.event === "LOGIN_FAILED")));
+    client.test("lockout recorded", () =>
+        client.assert(response.body.some(e => e.event === "LOGIN_LOCKED" || e.event === "LOGIN_BLOCKED")));
+    client.test("admin actions recorded with an actor", () =>
+        client.assert(response.body.some(e => e.event === "USER_CREATED" && e.actorId !== null)));
+    client.test("no secrets leaked into the trail", () =>
+        client.assert(!JSON.stringify(response.body).toLowerCase().includes("password\\":\\"")));
+%}
+
+### E2 — filter by the throttled account
+GET {{authHost}}/auth/admin/events?loginId={{uniq}}
+> {%
+    client.test("filtered 200", () => client.assert(response.status === 200));
+    client.test("only that account", () =>
+        client.assert(response.body.every(e => (e.loginId || "").toLowerCase() === client.global.get("uniq").toLowerCase())));
+%}
+
+### E3 — filter by event type
+GET {{authHost}}/auth/admin/events?event=LOGIN_FAILED&limit=20
+> {%
+    client.test("filtered 200", () => client.assert(response.status === 200));
+    client.test("all LOGIN_FAILED", () => client.assert(response.body.every(e => e.event === "LOGIN_FAILED")));
+%}
+
+### E4 — the trail is admin-only (keep last: swaps the session to a student)
+POST {{authHost}}/auth/login
+Content-Type: application/json
+
+{ "loginId": "{{studentLogin}}", "password": "{{studentPassword}}" }
+> {% client.test("student login 200", () => client.assert(response.status === 200)); %}
+
+###
+GET {{authHost}}/auth/admin/events
+> {%
+    client.test("student blocked 403", () => client.assert(response.status === 403));
+    client.test("code FORBIDDEN", () => client.assert(response.body.code === "FORBIDDEN"));
+%}

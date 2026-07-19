@@ -2,6 +2,7 @@ package in.ac.iiitb.auth.web;
 
 import in.ac.iiitb.auth.error.*;
 import in.ac.iiitb.auth.web.dto.ErrorResponse;
+import in.ac.iiitb.auth.error.LoginThrottledException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -65,5 +66,19 @@ public class ApiExceptionHandler {
     public ResponseEntity<ErrorResponse> selfModification() {
         return ResponseEntity.status(HttpStatus.CONFLICT)
             .body(new ErrorResponse("SELF_MODIFICATION", "You cannot deactivate or demote your own account"));
+    }
+
+    // ----- Day 15: login throttling -----
+
+    /**
+     * 429 with Retry-After, so a client (and a human) can tell a lockout apart from a bad password.
+     * This does not leak account existence: the throttle counts the submitted login id whether or
+     * not it resolves, so an unknown id locks out exactly the same way.
+     */
+    @ExceptionHandler(LoginThrottledException.class)
+    public ResponseEntity<ErrorResponse> throttled(LoginThrottledException ex) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+            .header("Retry-After", Long.toString(ex.retryAfterSeconds()))
+            .body(new ErrorResponse("LOGIN_THROTTLED", ex.getMessage()));
     }
 }

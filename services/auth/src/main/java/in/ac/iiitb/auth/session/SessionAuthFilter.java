@@ -36,7 +36,15 @@ public class SessionAuthFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chain)
         throws ServletException, IOException {
 
-        String path = req.getRequestURI();
+        String raw = req.getRequestURI();
+        // Day 15: authorise on the CANONICAL path. getRequestURI() is the raw, undecoded path while
+        // Spring routes on the decoded/normalised one, so matching the raw form let /api/%61dmin/...
+        // and /api//admin/... reach admin handlers without tripping the admin prefix test.
+        if (RequestPaths.isSuspicious(raw)) {
+            writeError(res, HttpServletResponse.SC_BAD_REQUEST, "BAD_REQUEST", "Malformed request path");
+            return;
+        }
+        String path = RequestPaths.canonical(raw);
         String sid = readCookie(req, "sid");
 
         CurrentUser user = sessions.resolve(sid).orElse(null);
