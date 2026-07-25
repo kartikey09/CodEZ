@@ -37,6 +37,8 @@ public class StandingsBroadcaster {
     private final ScheduledExecutorService scheduler;
 
     private final Map<Long, ScheduledFuture<?>> pending = new ConcurrentHashMap<>();
+    /** Wall-clock ms of the last broadcast per contest, so a sustained burst can't defer updates past maxWaitMs. */
+    private final Map<Long, Long> lastPublishedAt = new ConcurrentHashMap<>();
 
     public StandingsBroadcaster(ScoreboardService scoreboard, ScoringProperties scoringProps,
                                 BroadcastProperties props, StringRedisTemplate redis, ObjectMapper json,
@@ -49,17 +51,28 @@ public class StandingsBroadcaster {
         this.scheduler = scheduler;
     }
 
-    /** Request a (debounced) recompute + broadcast for a contest. */
+
+    /**
+     * Request a (debounced) recompute + broadcast for a contest. Normally we wait for a quiet period of
+     * {@code debounceMs} before firing, so a flurry of verdicts collapses into one broadcast. But under a
+     * sustained burst the quiet period would never arrive, so we cap the wait: if the board hasn't been
+     * broadcast in the last {@code maxWaitMs}, the delay shrinks toward zero and an update is forced.
+     */
     public void schedule(long contestId) {
         pending.compute(contestId, (cid, existing) -> {
             if (existing != null) {
                 existing.cancel(false);
             }
-            return scheduler.schedule(() -> publishNow(cid), props.debounceMs(), TimeUnit.MILLISECONDS);    //dbounce time, the unit in which the time is given
+            long now = System.currentTimeMillis();
+            long lastPublish = lastPublishedAt.getOrDefault(cid, now);   // treat a never-seen contest as fresh
+            long forceDeadline = lastPublish + props.maxWaitMs();
+            long delay = Math.min(props.debounceMs(), Math.max(0L, forceDeadline - now));
+            return scheduler.schedule(() -> publishNow(cid), delay, TimeUnit.MILLISECONDS);
         });
     }
 
     private void publishNow(long contestId) {
+        lastPublishedAt.put(contestId, System.currentTimeMillis());          // reset the maxWaitMs clock
         try {
             scoreboard.rebuild(contestId);                                   // force a fresh ZSET from submissions
             StandingsResponse board = scoreboard.standings(contestId, props.broadcastLimit());

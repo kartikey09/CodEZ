@@ -5,7 +5,6 @@ import in.ac.iiitb.contest.contest.ContestRepository;
 import in.ac.iiitb.contest.contest.Problem;
 import in.ac.iiitb.contest.contest.ProblemRepository;
 import in.ac.iiitb.contest.error.*;
-import jakarta.transaction.Transactional;
 import org.springframework.data.redis.connection.stream.StreamRecords;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -111,7 +110,11 @@ public class SubmissionService {
     private long enqueue(long userId, long problemId, String language, String sourceCode,
                          Admission a, SubmissionKind kind) {
         try {
-            Submission saved = transactionalPersist(userId, problemId, a.contest().getId(), language, sourceCode, kind);
+            // submissions.save(...) is already transactional (SimpleJpaRepository is @Transactional
+            // per method) — no wrapper method needed, and a same-class @Transactional wrapper called
+            // via `this.` wouldn't go through Spring's proxy anyway, so it would be a no-op.
+            Submission saved = submissions.save(new Submission(userId, problemId, a.contest().getId(),
+                    language, sourceCode, kind));
             redis.opsForStream().add(StreamRecords.mapBacked(Map.of(
                             "submissionId", Long.toString(saved.getId()),
                             "problemId", Long.toString(problemId),
@@ -125,12 +128,6 @@ public class SubmissionService {
             redis.delete(a.inflightKey());
             throw new SubmissionDatabaseException(e);
         }
-    }
-
-    @Transactional
-    public Submission transactionalPersist(long userId, long problemId, long contestId, String language,
-                                           String sourceCode, SubmissionKind kind) {
-        return submissions.save(new Submission(userId, problemId, contestId, language, sourceCode, kind));
     }
 
     private record Admission(Problem problem, Contest contest, String inflightKey) {
