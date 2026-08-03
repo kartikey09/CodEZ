@@ -1,6 +1,12 @@
 package in.ac.iiitb.orchestrator.worker;
 
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.validation.annotation.Validated;
 
 /**
  * Worker configuration (app.worker). Day-7 fields plus the Day-8 robustness knobs:
@@ -16,32 +22,40 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *       instead of running every test. Runs are always exhaustive (they need the full sample breakdown).
  * P0-4: inflightTtlSeconds -- TTL the worker re-takes on the one-in-flight lock at markRunning, so a long
  *       queue wait doesn't eat into the judging window. Should match contest-api's app.submission value.
+ *
+ * VALIDATION: constructor binding fills an absent property with the primitive default -- 0 for a number,
+ * false for a boolean -- so a typo'd or forgotten key is silently "configured" rather than rejected. That
+ * has already bitten this project once (app.broadcast.max-wait-ms shipped missing, which zeroed the
+ * standings debounce). The constraints below turn every such omission into a startup failure naming the
+ * offending key. Booleans are boxed for the same reason: only a wrapper can tell "absent" from "false".
  */
+@Validated
 @ConfigurationProperties(prefix = "app.worker")
 public record WorkerProperties(
-    String streamKey,
-    String group,
-    String consumer,
-    long blockMs,
-    int batchCount,
-    long pollInitialBackoffMs,
-    long pollMaxBackoffMs,
-    long pollMaxWaitMs,
-    int compileOutputMaxBytes,
-    String inflightKeyPrefix,
-    String userChannelPrefix,
-    int batchSize,
-    long reclaimIntervalMs,
-    long reclaimMinIdleMs,
-    int reclaimBatch,
-    int maxDeliveries,
-    int breakerFailureThreshold,
-    long breakerOpenMs,
-    long breakerPauseMs,
-    int judgeConcurrency,
-    long drainTimeoutMs,
-    int testCacheMaxEntries,
-    long testCacheExpireAfterAccessMs,
-    boolean submitEarlyExit,
-    long inflightTtlSeconds) {
+    @NotBlank String streamKey,
+    @NotBlank String group,
+    @NotBlank String consumer,
+    @Positive long blockMs,
+    @Positive int batchCount,
+    @Positive long pollInitialBackoffMs,
+    @Positive long pollMaxBackoffMs,
+    @Positive long pollMaxWaitMs,
+    @Positive int compileOutputMaxBytes,
+    @NotBlank String inflightKeyPrefix,
+    @NotBlank String userChannelPrefix,
+    @Positive int batchSize,
+    @Positive long reclaimIntervalMs,
+    @Positive long reclaimMinIdleMs,
+    @Positive int reclaimBatch,
+    @Positive int maxDeliveries,
+    @Positive int breakerFailureThreshold,
+    @Positive long breakerOpenMs,
+    @Positive long breakerPauseMs,
+    @Positive int judgeConcurrency,
+    /** 0 is legitimate: force the pool down immediately instead of draining. */
+    @PositiveOrZero long drainTimeoutMs,
+    @Positive int testCacheMaxEntries,
+    @Positive long testCacheExpireAfterAccessMs,
+    @NotNull Boolean submitEarlyExit,
+    @Positive long inflightTtlSeconds) {
 }

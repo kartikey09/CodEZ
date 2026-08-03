@@ -33,6 +33,12 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter</artifactId>
         </dependency>
+        <!-- JSR-380 constraints on @ConfigurationProperties, so a missing app.worker/app.judge0 key fails
+             the context at startup instead of silently binding a primitive to 0/false -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
         <!-- RestClient lives here; pulling spring-web directly avoids dragging in Tomcat -->
         <dependency>
             <groupId>org.springframework</groupId>
