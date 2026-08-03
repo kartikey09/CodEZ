@@ -21,6 +21,10 @@
         <java.version>21</java.version>
         <!-- standalone shades Jetty/Jackson/etc., so it can't collide with Spring Boot's copies -->
         <wiremock.version>3.9.2</wiremock.version>
+        <!-- docker-java (via Testcontainers) still negotiates Docker API 1.32, which Engine 25+ rejects
+             (minimum API 1.40), so the 'redis-it' profile pins a modern one. Override on an older engine:
+             ./mvnw test -Predis-it -Ddocker.api.version=1.41 -->
+        <docker.api.version>1.44</docker.api.version>
     </properties>
 
     <dependencies>
@@ -56,6 +60,12 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- Bounded, self-evicting test-case cache (see TestCache); version managed by the Boot parent -->
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
@@ -65,6 +75,19 @@
             <groupId>org.wiremock</groupId>
             <artifactId>wiremock-standalone</artifactId>
             <version>${wiremock.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- P0-1: real-Redis end-to-end for the concurrent worker (SubmissionWorkerRedisIT, tagged 'redis',
+             excluded from the default build). Versions come from the Spring Boot dependency BOM. -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -80,9 +103,12 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
                     <!-- The live Judge0 matrix is tagged 'judge0' and skipped by default (it needs a
-                         running Judge0). Run it on demand:
-                         ./mvnw test -DexcludedGroups= -Dgroups=judge0   (chaos IT helpers: -Dgroups=chaos) -->
-                    <excludedGroups>judge0,chaos</excludedGroups>
+                         running Judge0). The P0-1 real-Redis end-to-end is tagged 'redis' and skipped by
+                         default (it needs a Docker daemon for Testcontainers). An explicit value here wins
+                         over -DexcludedGroups, so each opt-in suite is run through its own profile:
+                         ./mvnw test -Pjudge0-live     (live Judge0 matrix)
+                         ./mvnw test -Predis-it        (real-Redis end-to-end) -->
+                    <excludedGroups>judge0,chaos,redis</excludedGroups>
                     <includes>
                         <include>**/*Test.java</include>
                         <include>**/Test*.java</include>
@@ -125,6 +151,28 @@
                         <configuration combine.children="override">
                             <groups>judge0</groups>
                             <excludedGroups>__no_exclusions__</excludedGroups>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <!-- Run the P0-1 real-Redis end-to-end (needs a Docker daemon; Testcontainers starts redis:7-alpine):
+             ./mvnw test -Predis-it -->
+        <profile>
+            <id>redis-it</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration combine.children="override">
+                            <groups>redis</groups>
+                            <excludedGroups>__no_exclusions__</excludedGroups>
+                            <systemPropertyVariables>
+                                <!-- docker-java's default (1.32) predates the engine's minimum API -->
+                                <api.version>${docker.api.version}</api.version>
+                            </systemPropertyVariables>
                         </configuration>
                     </plugin>
                 </plugins>

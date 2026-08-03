@@ -17,9 +17,9 @@ app:
   judge0:
     base-url: http://localhost:2358
     auth-token: "326fca22095db4e3e9d7e21f40121062efd1c24ad4a30070"   # DEV ONLY — must match judge0.conf AUTHN_TOKEN
-    connect-timeout-ms: 2000
-    read-timeout-ms: 10000
-    max-retries: 3
+    connect-timeout-ms: 2000  # max time the service waits to establish connection with the judge0 service
+    read-timeout-ms: 10000  # max time the service waits for judge0 to send data after establishing connection
+    max-retries: 3  #number of retries to submit a code to judge0
   worker:
     stream-key: subq                    # must match contest-api's app.submission.stream-key
     group: workers
@@ -33,6 +33,8 @@ app:
     inflight-key-prefix: "inflight:"    # must match contest-api's in-flight lock key
     user-channel-prefix: "ch:user:"     # pub/sub channel the realtime service (Day 10) will consume
     batch-size: 1                       # tests submitted per Judge0 /submissions/batch call; 1 = one-at-a-time (Day-7 behaviour)
+    judge-concurrency: 16               # P0-1: max submissions judged in parallel (size ~2x Judge0 worker count)
+    drain-timeout-ms: 60000             # on shutdown, how long to let in-flight judges finish before forcing the pool down
     reclaim-interval-ms: 30000          # how often the reclaimer sweeps the PEL
     reclaim-min-idle-ms: 90000         # only claim entries idle for at least this long
     reclaim-batch: 50                   # max pending entries inspected per sweep
@@ -40,3 +42,5 @@ app:
     breaker-failure-threshold: 5        # consecutive Judge0 transport failures before the circuit opens
     breaker-open-ms: 15000             # how long the circuit stays open before a probe is allowed
     breaker-pause-ms: 1000              # how long the read loop sleeps each tick while the circuit is open
+    test-cache-max-entries: 500         # TestCache capacity, in problems' worth of test cases
+    test-cache-expire-after-access-ms: 3600000   # drop a problem's tests after 1h with no submission touching it

@@ -42,12 +42,16 @@ class JudgePipelineLiveIT {
             /* maxDeliveries */      3,
             /* breakerFailureThreshold */ 5,
             /* breakerOpenMs */      30000,
-            /* breakerPauseMs */     1000);
+            /* breakerPauseMs */     1000,
+            /* judgeConcurrency */   4,
+            /* drainTimeoutMs */     5000,
+            /* testCacheMaxEntries */ 500,
+            /* testCacheExpireAfterAccessMs */ 3_600_000);
 
     private final JudgeService judge = new JudgeService(client, props);
 
     private static final ProblemRow SUM = new ProblemRow(1, 1000, 256, 1);
-    private static final List<TestRow> SAMPLE = List.of(new TestRow(1, "2 3\n", "5\n"));
+    private static final List<TestRow> SAMPLE = List.of(new TestRow(1, "2 3\n", "5\n", true));
 
     private static final String C_OK =
             "#include <stdio.h>\nint main(){int a,b;scanf(\"%d %d\",&a,&b);printf(\"%d\\n\",a+b);return 0;}";
@@ -87,7 +91,10 @@ class JudgePipelineLiveIT {
     }
 
     private JudgeOutcome run(String language, String source) {
-        JobRow job = new JobRow(1, 7, 1, 1, language, source, "queued");
-        return judge.judge(job, SUM, SAMPLE);
+        // A Submit job (kind="submit"): judges every test given, no per-test breakdown — the
+        // verdict matrix is what this IT asserts. The Run path (kind="run", sample-only tests +
+        // breakdown) has no coverage yet.
+        JobRow job = new JobRow(1, 7, 1, 1, language, source, "queued", "submit");
+        return judge.judge(job, SUM, SAMPLE, /* includeBreakdown */ false);
     }
 }
