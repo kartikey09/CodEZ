@@ -11,6 +11,11 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *                      roughly 2x the Judge0 worker count: judging is I/O-bound, so a small multiple keeps
  *                      Judge0's workers busy without overwhelming it.
  *   drainTimeoutMs    - on shutdown, how long to let in-flight judges finish before forcing the pool down.
+ *
+ * P0-3: submitEarlyExit -- stop judging a SUBMIT at the first failing test (ICPC "failed on test k"),
+ *       instead of running every test. Runs are always exhaustive (they need the full sample breakdown).
+ * P0-4: inflightTtlSeconds -- TTL the worker re-takes on the one-in-flight lock at markRunning, so a long
+ *       queue wait doesn't eat into the judging window. Should match contest-api's app.submission value.
  */
 @ConfigurationProperties(prefix = "app.worker")
 public record WorkerProperties(
@@ -36,5 +41,7 @@ public record WorkerProperties(
     int judgeConcurrency,
     long drainTimeoutMs,
     int testCacheMaxEntries,
-    long testCacheExpireAfterAccessMs) {
+    long testCacheExpireAfterAccessMs,
+    boolean submitEarlyExit,
+    long inflightTtlSeconds) {
 }

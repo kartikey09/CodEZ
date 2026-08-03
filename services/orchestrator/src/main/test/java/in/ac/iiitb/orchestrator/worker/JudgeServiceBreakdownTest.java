@@ -56,10 +56,16 @@ class JudgeServiceBreakdownTest {
         assertThat(outcome.tests()).isEmpty();
     }
 
+    /**
+     * Holds P0-3's early-exit off on both sides: with it on, a Submit deliberately stops at the first
+     * failure and reports fewer passes than an exhaustive Run, which is the point of that change and not
+     * something the breakdown flag is responsible for. Judging the same tests, the flag itself must still
+     * change nothing but the per-test list — that's what this pins.
+     */
     @Test
     void breakdownFlagDoesNotChangeTheVerdict() {
-        JudgeOutcome run = judgeServiceReturning(AC, WA, AC).judge(RUN, SUM, THREE_TESTS, true);
-        JudgeOutcome submit = judgeServiceReturning(AC, WA, AC).judge(SUBMIT, SUM, THREE_TESTS, false);
+        JudgeOutcome run = exhaustiveJudgeReturning(AC, WA, AC).judge(RUN, SUM, THREE_TESTS, true);
+        JudgeOutcome submit = exhaustiveJudgeReturning(AC, WA, AC).judge(SUBMIT, SUM, THREE_TESTS, false);
 
         assertThat(run.verdict()).isEqualTo(Verdict.WA).isEqualTo(submit.verdict());
         assertThat(run.failedTest()).isEqualTo(2).isEqualTo(submit.failedTest());
@@ -80,6 +86,11 @@ class JudgeServiceBreakdownTest {
 
     private static JudgeService judgeServiceReturning(int... statusIds) {
         return new JudgeService(new StubJudge0(statusIds), WorkerPropsFixture.defaults());
+    }
+
+    /** Sequential judging with P0-3's Submit early-exit disabled, so Run and Submit cover the same tests. */
+    private static JudgeService exhaustiveJudgeReturning(int... statusIds) {
+        return new JudgeService(new StubJudge0(statusIds), WorkerPropsFixture.withBatchSize(1, false));
     }
 
     private static JobRow job(String kind) {

@@ -56,7 +56,8 @@ class SubmissionWorkerConcurrencyTest {
             30000L, 90000L, 50, 3,
             5, 15000L, 1000L,
             CONCURRENCY, 60000L,            // judge-concurrency, drain-timeout-ms
-            500, 3_600_000L);               // test-cache max entries / expire-after-access
+            500, 3_600_000L,                // test-cache max entries / expire-after-access
+            true, 120L);                    // submit-early-exit, inflight-ttl-seconds
     }
 
     private static MapRecord<String, Object, Object> record(long submissionId) {

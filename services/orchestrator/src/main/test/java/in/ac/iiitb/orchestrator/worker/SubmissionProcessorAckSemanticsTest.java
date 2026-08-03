@@ -49,7 +49,8 @@ class SubmissionProcessorAckSemanticsTest {
             1, 30000L, 90000L, 50, 3,
             5, 15000L, 1000L,
             16, 60000L,
-            500, 3_600_000L);
+            500, 3_600_000L,
+            true, 120L);                // submit-early-exit, inflight-ttl-seconds
     }
 
     private static MapRecord<String, Object, Object> record(long submissionId) {
@@ -81,7 +82,7 @@ class SubmissionProcessorAckSemanticsTest {
             .thenReturn(new JudgeOutcome(Verdict.AC, null, 1, 1, 10, 100, null, List.of()));
 
         SubmissionProcessor processor = new SubmissionProcessor(
-            redis, store, tests, judge, breaker, props(), new ObjectMapper());
+            redis, store, tests, judge, breaker, mock(InflightLock.class), props(), new ObjectMapper());
 
         MapRecord<String, Object, Object> rec = record(7);
         processor.process(rec);
@@ -110,7 +111,7 @@ class SubmissionProcessorAckSemanticsTest {
             .thenThrow(new Judge0Exception("judge0 unreachable", new RuntimeException("connect timeout")));
 
         SubmissionProcessor processor = new SubmissionProcessor(
-            redis, store, tests, judge, breaker, props(), new ObjectMapper());
+            redis, store, tests, judge, breaker, mock(InflightLock.class), props(), new ObjectMapper());
 
         int before = breaker.failureCount();
         processor.process(record(8));
@@ -134,7 +135,7 @@ class SubmissionProcessorAckSemanticsTest {
         when(store.loadJob(9L)).thenReturn(new JobRow(9, 42, 5, 3, "cpp", "code", "done", "submit"));
 
         SubmissionProcessor processor = new SubmissionProcessor(
-            redis, store, mock(TestCache.class), judge, breaker, props(), new ObjectMapper());
+            redis, store, mock(TestCache.class), judge, breaker, mock(InflightLock.class), props(), new ObjectMapper());
 
         processor.process(record(9));
 
@@ -155,7 +156,7 @@ class SubmissionProcessorAckSemanticsTest {
         when(store.loadJob(404L)).thenReturn(null);   // row gone
 
         SubmissionProcessor processor = new SubmissionProcessor(
-            redis, store, mock(TestCache.class), judge, breaker, props(), new ObjectMapper());
+            redis, store, mock(TestCache.class), judge, breaker, mock(InflightLock.class), props(), new ObjectMapper());
 
         processor.process(record(404));
 

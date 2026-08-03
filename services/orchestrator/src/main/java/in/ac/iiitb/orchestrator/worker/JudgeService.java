@@ -19,7 +19,11 @@ import java.util.List;
  *   batch-size  > N  : BATCHED — submit N tests in one /submissions/batch call, poll the batch, evaluate
  *                      in ordinal order.
  *
- * EXHAUSTIVE JUDGING: every test is run to completion, no early exit — this is required to report an
+ * P0-3 EARLY EXIT: a SUBMIT stops at the first failing test (sequential) or first failing chunk (batched) --
+ * ICPC reports "failed on test k", so the pass count is tests passed *before* the failure. A RUN stays
+ * exhaustive (below) because it must show every sample's result. Toggle via app.worker.submit-early-exit.
+ *
+ * EXHAUSTIVE JUDGING (RUN, or SUBMIT with early-exit off): every test is run to completion — this is required to report an
  * accurate "X of Y tests passed" count. The one exception is a Compile Error: compiling is source-only
  * and input-independent, so a CE on the first test means every other test would CE identically; that
  * still short-circuits immediately, exactly as before (this trades away the old per-test early-exit
@@ -57,15 +61,20 @@ public class JudgeService {
         double wall = rt.wallLimitSeconds(problem.timeLimitMs());
         int memKb = rt.memoryLimitKb(problem.memoryLimitMb());
 
+        // P0-3: SUBMIT stops at the first failing test (ICPC "failed on test k"); RUN stays exhaustive so it
+        // can show every sample's result. A CE still short-circuits regardless (compile is input-independent).
+        boolean earlyExit = props.submitEarlyExit() && !"run".equals(job.kind());
+
         return props.batchSize() <= 1
-            ? judgeSequential(job.sourceCode(), rt, cpu, wall, memKb, tests, includeBreakdown)
-            : judgeBatched(job.sourceCode(), rt, cpu, wall, memKb, tests, includeBreakdown);
+            ? judgeSequential(job.sourceCode(), rt, cpu, wall, memKb, tests, includeBreakdown, earlyExit)
+            : judgeBatched(job.sourceCode(), rt, cpu, wall, memKb, tests, includeBreakdown, earlyExit);
     }
 
     // ---- sequential (Day 7) ----
 
     private JudgeOutcome judgeSequential(String source, LanguageRuntime rt, double cpu, double wall,
-                                         int memKb, List<TestRow> tests, boolean includeBreakdown) {
+                                         int memKb, List<TestRow> tests, boolean includeBreakdown,
+                                         boolean earlyExit) {
         Accumulator acc = new Accumulator();
         int total = tests.size();
         for (TestRow t : tests) {
@@ -77,6 +86,10 @@ public class JudgeService {
             if (ce != null) {
                 return ce;
             }
+            // P0-3: SUBMIT stops here at the first failure, so a wrong submission costs one Judge0 call, not N.
+            if (earlyExit && acc.firstFailureVerdict != null) {
+                return acc.finish(total);
+            }
         }
         return acc.finish(total);
     }
@@ -84,7 +97,8 @@ public class JudgeService {
     // ---- batched (Day 8) ----
 
     private JudgeOutcome judgeBatched(String source, LanguageRuntime rt, double cpu, double wall,
-                                      int memKb, List<TestRow> tests, boolean includeBreakdown) {
+                                      int memKb, List<TestRow> tests, boolean includeBreakdown,
+                                      boolean earlyExit) {
         Accumulator acc = new Accumulator();
         int total = tests.size();
         int size = Math.max(1, props.batchSize());
@@ -106,6 +120,11 @@ public class JudgeService {
                 JudgeOutcome ce = evaluateTest(acc, t, res, memKb, total, includeBreakdown);
                 if (ce != null) {
                     return ce;
+                }
+                // P0-3: within a chunk every test already ran in Judge0, but on the first failure of a SUBMIT
+                // we stop here and never submit the remaining chunks -- bounding the amplification to one chunk.
+                if (earlyExit && acc.firstFailureVerdict != null) {
+                    return acc.finish(total);
                 }
             }
         }

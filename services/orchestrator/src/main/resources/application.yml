@@ -31,8 +31,10 @@ app:
     poll-max-wait-ms: 30000             # give up polling a token after this -> IE
     compile-output-max-bytes: 8192      # keep <= 8 KB of compiler stderr on CE
     inflight-key-prefix: "inflight:"    # must match contest-api's in-flight lock key
+    inflight-ttl-seconds: 120           # P0-4: TTL re-taken on the in-flight lock at markRunning (match contest-api)
     user-channel-prefix: "ch:user:"     # pub/sub channel the realtime service (Day 10) will consume
-    batch-size: 1                       # tests submitted per Judge0 /submissions/batch call; 1 = one-at-a-time (Day-7 behaviour)
+    batch-size: 20                      # P0-2: tests per Judge0 /submissions/batch call (chunk size). >1 uses the batched path
+    submit-early-exit: true             # P0-3: stop a SUBMIT at the first failing test/chunk (runs stay exhaustive)
     judge-concurrency: 16               # P0-1: max submissions judged in parallel (size ~2x Judge0 worker count)
     drain-timeout-ms: 60000             # on shutdown, how long to let in-flight judges finish before forcing the pool down
     reclaim-interval-ms: 30000          # how often the reclaimer sweeps the PEL

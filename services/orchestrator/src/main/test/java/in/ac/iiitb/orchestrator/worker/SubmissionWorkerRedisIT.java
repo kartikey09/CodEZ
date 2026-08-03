@@ -84,7 +84,8 @@ class SubmissionWorkerRedisIT {
             1, 30000L, 90000L, 50, 3,
             5, 15000L, 1000L,
             CONCURRENCY, 10000L,
-            500, 3_600_000L);
+            500, 3_600_000L,
+            true, 120L);                     // submit-early-exit, inflight-ttl-seconds
     }
 
     @Test

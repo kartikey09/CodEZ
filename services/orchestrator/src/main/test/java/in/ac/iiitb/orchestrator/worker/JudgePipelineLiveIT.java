@@ -46,7 +46,9 @@ class JudgePipelineLiveIT {
             /* judgeConcurrency */   4,
             /* drainTimeoutMs */     5000,
             /* testCacheMaxEntries */ 500,
-            /* testCacheExpireAfterAccessMs */ 3_600_000);
+            /* testCacheExpireAfterAccessMs */ 3_600_000,
+            /* submitEarlyExit */    false,   // the live matrix asserts full "X of Y" counts, so judge every test
+            /* inflightTtlSeconds */ 120);
 
     private final JudgeService judge = new JudgeService(client, props);
 

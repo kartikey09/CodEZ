@@ -13,6 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * Order of admission checks is deliberate:
@@ -35,16 +36,19 @@ public class SubmissionService {
     private final StringRedisTemplate redis;
     private final SubmissionProperties props;
     private final RunRateLimiter runRateLimiter;
+    private final InflightLock inflightLock;
 
     public SubmissionService(ContestRepository contests, ProblemRepository problems,
                              SubmissionRepository submissions, StringRedisTemplate redis,
-                             SubmissionProperties props, RunRateLimiter runRateLimiter) {
+                             SubmissionProperties props, RunRateLimiter runRateLimiter,
+                             InflightLock inflightLock) {
         this.contests = contests;
         this.problems = problems;
         this.submissions = submissions;
         this.redis = redis;
         this.props = props;
         this.runRateLimiter = runRateLimiter;
+        this.inflightLock = inflightLock;
     }
 
     public long submit(long userId, long problemId, String language, String sourceCode) {
@@ -54,7 +58,7 @@ public class SubmissionService {
         Boolean tookCooldown = redis.opsForValue()
                 .setIfAbsent(cooldownKey, "1", Duration.ofMillis(props.cooldownMs()));
         if (!Boolean.TRUE.equals(tookCooldown)) {
-            redis.delete(a.inflightKey());
+            inflightLock.releaseIfOwner(a.inflightKey(), a.token());   // P0-4: only free our own lock
             throw new CooldownActiveException();
         }
         return enqueue(userId, problemId, language, sourceCode, a, SubmissionKind.SUBMIT);
@@ -66,7 +70,7 @@ public class SubmissionService {
         try {
             runRateLimiter.check(userId);
         } catch (RunRateLimitExceededException e) {
-            redis.delete(a.inflightKey());
+            inflightLock.releaseIfOwner(a.inflightKey(), a.token());   // P0-4: only free our own lock
             throw e;
         }
         return enqueue(userId, problemId, language, sourceCode, a, SubmissionKind.RUN);
@@ -96,15 +100,15 @@ public class SubmissionService {
         if (!problem.getContestId().equals(contest.getId())) {
             throw new NotFoundException();
         }
-        // 5. one-in-flight lock (SET NX EX): blocks a second judge job (Submit or Run) while one is running
+        // 5. one-in-flight lock (SET NX EX): blocks a second judge job (Submit or Run) while one is running.
+        // P0-4: the value is a per-attempt owner token (not a timestamp), so release can compare-and-delete
+        // and never free a *different* submission's lock. The token rides the subq record to the orchestrator.
         String inflightKey = "inflight:" + userId;
-        Boolean tookInflight = redis.opsForValue()
-                .setIfAbsent(inflightKey, Long.toString(now.toEpochMilli()),
-                        Duration.ofSeconds(props.inflightTtlSeconds()));
-        if (!Boolean.TRUE.equals(tookInflight)) {
+        String inflightToken = UUID.randomUUID().toString();
+        if (!inflightLock.tryAcquire(inflightKey, inflightToken, props.inflightTtlSeconds())) {
             throw new SubmissionInFlightException();
         }
-        return new Admission(problem, contest, inflightKey);
+        return new Admission(problem, contest, inflightKey, inflightToken);
     }
 
     private long enqueue(long userId, long problemId, String language, String sourceCode,
@@ -121,15 +125,16 @@ public class SubmissionService {
                             "contestId", Long.toString(a.contest().getId()),
                             "userId", Long.toString(userId),
                             "language", language,
-                            "kind", kind.dbValue()))
+                            "kind", kind.dbValue(),
+                            "inflightToken", a.token()))     // P0-4: owner token for safe refresh/release
                     .withStreamKey(props.streamKey()));
             return saved.getId();
         } catch (Exception e) {
-            redis.delete(a.inflightKey());
+            inflightLock.releaseIfOwner(a.inflightKey(), a.token());   // P0-4: only free our own lock
             throw new SubmissionDatabaseException(e);
         }
     }
 
-    private record Admission(Problem problem, Contest contest, String inflightKey) {
+    private record Admission(Problem problem, Contest contest, String inflightKey, String token) {
     }
 }

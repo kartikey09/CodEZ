@@ -63,6 +63,7 @@ class SubmissionProcessorRunTest {
                 judge,
                 new Judge0CircuitBreaker(props.breakerFailureThreshold(), props.breakerOpenMs(),
                         System::currentTimeMillis),
+                mock(InflightLock.class),                              // the in-flight lock is not under test
                 props,
                 new ObjectMapper())
                 .process(record());
